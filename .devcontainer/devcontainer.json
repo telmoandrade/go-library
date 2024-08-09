@@ -1,0 +1,35 @@
+{
+  "name": "go-library",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "go-library",
+  "workspaceFolder": "/go-library",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "diffEditor.ignoreTrimWhitespace": false,
+        "files.trimTrailingWhitespace": true,
+        "editor.renderWhitespace": "trailing",
+        "editor.bracketPairColorization.enabled": true,
+        "editor.guides.bracketPairs": "active",
+        "editor.formatOnSave": true,
+        "go.toolsManagement.checkForUpdates": "local",
+        "go.useLanguageServer": true,
+        "go.gopath": "/go",
+        "go.goroot": "/usr/local/go",
+        "go.coverOnSave": true,
+        "gitlens.codeLens.enabled": false,
+        "gitlens.codeLens.authors.enabled": false,
+        "gitlens.statusBar.command": "gitlens.toggleFileBlame"
+      },
+      "extensions": [
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+        "golang.go",
+        "Gruntfuggly.todo-tree"
+      ]
+    }
+  },
+  "postStartCommand": "make devcontainer",
+  "remoteUser": "vscode",
+  "shutdownAction": "stopCompose"
+}

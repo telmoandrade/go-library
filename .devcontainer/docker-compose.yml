@@ -1,0 +1,21 @@
+services:
+  go-library:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DEBIAN_VERSION: bookworm
+    volumes:
+      - ..:/go-library:cached
+    command: sleep infinity
+    user: vscode
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
