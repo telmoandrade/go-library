@@ -1,0 +1,34 @@
+name: Validate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install dependencies
+        run: |
+          make golang-tools
+          go mod download
+
+      - name: Run lint
+        run: make lint
+
+      - name: Run test
+        run: |
+          go test -race -v ./...
+
+      - name: Run coverage
+        run: |
+          go test -cover ./...

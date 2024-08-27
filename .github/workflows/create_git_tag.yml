@@ -1,0 +1,43 @@
+name: Create git tag
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [closed]
+
+permissions: write-all
+
+jobs:
+  create-git-tag:
+    name: Create git tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create git tag
+        if: ${{ github.event.pull_request.merged == true }}
+        env:
+          MESSAGE: 'PR #${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}'
+        run: |
+          level='patch'
+          label=$(jq -r ".pull_request.labels[].name | select(test(\"release/(major|minor|patch)\"))" "${GITHUB_EVENT_PATH}")
+
+          if [ "$(echo "${label}" | wc -l)" -ne 1 ]; then
+            echo "::warning title=Invalid labels::Multiple release labels not allowed: $(echo "${label}" | tr '\n' ' ')"
+          else
+            if [ ! -z "$label" ]; then
+              level=${label#"release/"}
+            fi
+          fi
+
+          latest_tag=$(git ls-remote --tags origin | grep -oP "tags/\K[0-9]+\.[0-9]+\.[0-9]+$"| sort -rV | head -n 1)
+
+          npm install semver
+          tag=$(node -e "const semver = require('semver');process.stdout.write(semver.inc('$latest_tag' || '0.0.0', '$level'));")
+
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+          git tag -a "${tag}" -m "${tag}: ${MESSAGE}"
+          git push origin "${tag}"
