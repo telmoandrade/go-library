@@ -14,13 +14,13 @@ COPY --from=go --chown=vscode:golang --chmod=g+r+w+s /usr/local/go /usr/local/go
 
 ENV GOPATH=/go \
     PATH=$GOPATH/bin:/usr/local/go/bin:$PATH \
-    CGO_ENABLED=0 \
+    CGO_ENABLED=1 \
     GO111MODULE=on
 
 USER vscode
 ENV GOPATH=/go \
     PATH=$GOPATH/bin:/usr/local/go/bin:$PATH \
-    CGO_ENABLED=0 \
+    CGO_ENABLED=1 \
     GO111MODULE=on
 
 RUN echo "alias ll='ls -laF'" > ~/.bash_aliases

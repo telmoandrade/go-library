@@ -29,7 +29,7 @@
       ]
     }
   },
-  "postStartCommand": "make devcontainer",
+  "postStartCommand": "make requirements",
   "remoteUser": "vscode",
   "shutdownAction": "stopCompose"
 }

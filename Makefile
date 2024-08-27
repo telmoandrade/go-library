@@ -8,13 +8,13 @@ GIT_USER_EMAIL := $(shell git config --get user.email)
 HOST_NAME := $(shell hostname)
 
 
-## help: print this help message
+## help:print this help message
 .PHONY: help
 help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
-## apt-update: apt update autoremove upgrade and install
+## apt-update:apt update autoremove upgrade and install
 .PHONY: apt-update
 apt-update:
 	@echo "🐧 ${COLOR_CYAN}apt clean all${COLOR_OFF}"
@@ -28,7 +28,7 @@ apt-update:
 	@echo "🐧 ${COLOR_CYAN}apt install${COLOR_OFF}"
 	@sudo apt -qq -y install bash-completion
 
-## golang-vscode: install golang dependencies for vscode
+## golang-vscode:install golang dependencies for vscode
 .PHONY: golang-vscode
 golang-vscode:
 	@echo "🐿️  ${COLOR_CYAN}tools-vscode gopls${COLOR_OFF}"
@@ -43,12 +43,20 @@ golang-vscode:
 	@go install github.com/haya14busa/goplay/cmd/goplay@latest
 	@echo "🐿️  ${COLOR_CYAN}tools-vscode dlv${COLOR_OFF}"
 	@go install github.com/go-delve/delve/cmd/dlv@latest
+
+## golang-vscode:install golang tools
+.PHONY: golang-tools
+golang-tools:
 	@echo "🐿️  ${COLOR_CYAN}tools-vscode staticcheck${COLOR_OFF}"
 	@go install honnef.co/go/tools/cmd/staticcheck@latest
+	@echo "🐿️  ${COLOR_CYAN}tools-vscode golangci-lint${COLOR_OFF}"
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@echo "🐿️  ${COLOR_CYAN}tools mockgen${COLOR_OFF}"
+	@go install go.uber.org/mock/mockgen@latest
 
-## devcontainer: everything vscode with devcontainer needs
-.PHONY: devcontainer
-devcontainer: apt-update golang-vscode
+## requirements:everything you need for development
+.PHONY: requirements
+requirements: apt-update golang-vscode golang-tools
 	@echo ""
 ifeq ($(GIT_USER_NAME),)
 	@echo "📣 Welcome ${COLOR_GREEN}$$USER@${HOST_NAME}${COLOR_OFF}"
@@ -56,3 +64,23 @@ else
 	@echo "📣 Welcome ${COLOR_GREEN}${GIT_USER_NAME}${COLOR_OFF} ${COLOR_YELLOW}(${GIT_USER_EMAIL})${COLOR_OFF}"
 endif
 	@echo ""
+
+## pre-push:tidy modfiles, go generate and format .go files
+.PHONY: pre-push
+pre-push:
+	@go mod tidy
+	@go generate ./...
+	@go fmt ./...
+
+## lint:run quality control checks
+.PHONY: lint
+lint:
+	@go vet ./...
+	@staticcheck ./...
+	@golangci-lint run ./...
+
+## test:run all tests
+.PHONY: test
+test:
+	@go test -v -race ./...
+	@go test -cover ./...
