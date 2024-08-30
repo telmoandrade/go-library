@@ -31,7 +31,7 @@ jobs:
             fi
           fi
 
-          latest_tag=$(git ls-remote --tags origin | grep -oP "tags/\K[0-9]+\.[0-9]+\.[0-9]+$"| sort -rV | head -n 1)
+          latest_tag=$(git ls-remote --tags origin | grep -oP "tags/v\K[0-9]+\.[0-9]+\.[0-9]+$"| sort -rV | head -n 1)
 
           npm install semver
           tag=$(node -e "const semver = require('semver');process.stdout.write(semver.inc('$latest_tag' || '0.0.0', '$level'));")
@@ -39,5 +39,5 @@ jobs:
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
 
-          git tag -a "${tag}" -m "${tag}: ${MESSAGE}"
+          git tag -a "v${tag}" -m "${MESSAGE}"
           git push origin "${tag}"
