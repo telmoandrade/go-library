@@ -1,4 +1,4 @@
-package server
+package graceful
 
 import (
 	"context"
@@ -10,9 +10,9 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-func TestNewControl(t *testing.T) {
+func TestNewGracefulShutdown(t *testing.T) {
 	type args struct {
-		opts []OptionControl
+		opts []OptionGracefulShutdown
 	}
 	tests := []struct {
 		name string
@@ -24,15 +24,15 @@ func TestNewControl(t *testing.T) {
 		{
 			name: "with option",
 			args: args{
-				opts: []OptionControl{
-					func(c *control) {},
+				opts: []OptionGracefulShutdown{
+					func(c *gracefulShutdown) {},
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewControl(tt.args.opts...)
+			got := NewGracefulShutdown(tt.args.opts...)
 			if got == nil {
 				t.Errorf("NewControl() = nil, want != nil")
 			}
@@ -47,7 +47,7 @@ func TestWithTimeout(t *testing.T) {
 		want time.Duration
 	}{
 		{
-			name: "default",
+			name: "timeout 0",
 			want: 0,
 		},
 		{
@@ -58,9 +58,9 @@ func TestWithTimeout(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewControl(WithTimeout(tt.args))
+			gs := NewGracefulShutdown(WithTimeout(tt.args))
 
-			if got := c.timeout; got != tt.want {
+			if got := gs.timeout; got != tt.want {
 				t.Errorf("WithTimeout() = %v, want %v", got, tt.want)
 			}
 		})
@@ -70,11 +70,11 @@ func TestWithTimeout(t *testing.T) {
 func TestWithServers(t *testing.T) {
 	tests := []struct {
 		name string
-		args []Server
-		want []Server
+		args []GracefulServer
+		want []GracefulServer
 	}{
 		{
-			name: "default",
+			name: "empty",
 		},
 		{
 			name: "nil",
@@ -82,48 +82,48 @@ func TestWithServers(t *testing.T) {
 		},
 		{
 			name: "server nil",
-			args: []Server{
+			args: []GracefulServer{
 				nil,
 			},
-			want: []Server{},
+			want: []GracefulServer{},
 		},
 		{
 			name: "1 server",
-			args: []Server{
-				&MockServer{},
+			args: []GracefulServer{
+				&MockGracefulServer{},
 			},
-			want: []Server{
-				&MockServer{},
+			want: []GracefulServer{
+				&MockGracefulServer{},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewControl(WithServers(tt.args...))
+			gs := NewGracefulShutdown(WithServers(tt.args...))
 
-			if got := c.servers; !reflect.DeepEqual(got, tt.want) {
+			if got := gs.servers; !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("WithServers() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func Test_control_runServer(t *testing.T) {
+func Test_gracefulShutdown_runServer(t *testing.T) {
 	t.Run("cancel control context", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockServer(ctrl)
+		mock := NewMockGracefulServer(ctrl)
 		callStart := mock.EXPECT().Start().Return(nil).Times(1)
 		mock.EXPECT().Stop(gomock.Any()).Times(1).After(callStart)
 
-		c := NewControl()
-		c.runServer(mock)
+		gs := NewGracefulShutdown()
+		gs.runServer(mock)
 		go func() {
 			<-time.After(100 * time.Microsecond)
-			c.cancelCtx()
+			gs.cancelCtx()
 		}()
-		c.wg.Wait()
+		gs.wg.Wait()
 
 		<-time.After(200 * time.Microsecond)
 	})
@@ -132,13 +132,13 @@ func Test_control_runServer(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockServer(ctrl)
+		mock := NewMockGracefulServer(ctrl)
 		callStart := mock.EXPECT().Start().Return(errors.New("error")).Times(1)
 		mock.EXPECT().Stop(gomock.Any()).Times(1).After(callStart)
 
-		c := NewControl()
-		c.runServer(mock)
-		c.wg.Wait()
+		gs := NewGracefulShutdown()
+		gs.runServer(mock)
+		gs.wg.Wait()
 
 		<-time.After(200 * time.Microsecond)
 	})
@@ -147,7 +147,7 @@ func Test_control_runServer(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockServer(ctrl)
+		mock := NewMockGracefulServer(ctrl)
 		callStart := mock.EXPECT().Start().Return(errors.New("error")).Times(1)
 
 		callStop := mock.EXPECT().Stop(gomock.Any()).Times(1).After(callStart)
@@ -155,37 +155,37 @@ func Test_control_runServer(t *testing.T) {
 
 		mock.EXPECT().ForceStop().Times(1).After(callStop)
 
-		c := NewControl(WithTimeout(100 * time.Microsecond))
-		c.runServer(mock)
-		c.wg.Wait()
+		gs := NewGracefulShutdown(WithTimeout(100 * time.Microsecond))
+		gs.runServer(mock)
+		gs.wg.Wait()
 
 		<-time.After(200 * time.Microsecond)
 	})
 }
 
-func Test_control_Run(t *testing.T) {
+func Test_gracefulShutdown_Run(t *testing.T) {
 	t.Run("without servers", func(t *testing.T) {
-		c := NewControl()
-		c.Run(context.Background())
+		gs := NewGracefulShutdown()
+		gs.Run(context.Background())
 	})
 
 	t.Run("with servers nil", func(t *testing.T) {
-		c := NewControl(WithServers(nil))
-		c.Run(context.Background())
+		gs := NewGracefulShutdown(WithServers(nil))
+		gs.Run(context.Background())
 	})
 
 	t.Run("with servers", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := NewMockServer(ctrl)
+		mock := NewMockGracefulServer(ctrl)
 		mock.EXPECT().Start().Return(nil)
 		mock.EXPECT().Stop(gomock.Any())
 
-		c := NewControl(WithServers(mock))
+		gs := NewGracefulShutdown(WithServers(mock))
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		c.Run(ctx)
+		gs.Run(ctx)
 	})
 }
