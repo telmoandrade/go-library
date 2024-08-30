@@ -40,4 +40,4 @@ jobs:
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
 
           git tag -a "v${tag}" -m "${MESSAGE}"
-          git push origin "${tag}"
+          git push origin "v${tag}"
