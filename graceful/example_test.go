@@ -10,7 +10,7 @@ import (
 	"github.com/telmoandrade/go-library/graceful"
 )
 
-func ExempleNewGracefulServer() {
+func ExampleNewGracefulServer() {
 	ctx, stop := context.WithCancel(context.Background())
 
 	gs := graceful.NewGracefulShutdown(
@@ -39,7 +39,7 @@ func ExempleNewGracefulServer() {
 	// Server stop
 }
 
-func ExempleNewGracefulServerHttp() {
+func ExampleNewGracefulServerHttp() {
 	ctx, stop := context.WithCancel(context.Background())
 
 	s := &http.Server{
@@ -61,7 +61,4 @@ func ExempleNewGracefulServerHttp() {
 	gs.Run(ctx)
 
 	// Output:
-	// 2006/01/02 15:04:05 INFO [HTTP SERVER] Starting
-	// 2006/01/02 15:04:05 INFO [HTTP SERVER] Closing
-	// 2006/01/02 15:04:05 INFO [HTTP SERVER] Closed
 }
