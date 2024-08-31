@@ -18,23 +18,18 @@ type (
 		attrs    []any
 	}
 
-	// HttpServer http.Server wrapper
-	HttpServer interface {
-		// ListenAndServe http.Server.ListenAndServe()
+	httpServer interface {
 		ListenAndServe() error
-		// ListenAndServeTLS http.Server.ListenAndServeTLS()
 		ListenAndServeTLS(certFile, keyFile string) error
-		// Shutdown http.Server.Shutdown()
 		Shutdown(ctx context.Context) error
-		// Close http.Server.Close()
 		Close() error
 	}
 
-	// OptionGracefulServerHttp used in [NewGracefulServerHttp]
+	// OptionGracefulServerHttp are parameters used in [NewGracefulServerHttp]
 	OptionGracefulServerHttp func(*gracefulServerHttp)
 )
 
-func gracefulServerHttpStart(gs *gracefulServerHttp, s HttpServer) func() error {
+func gracefulServerHttpStart(gs *gracefulServerHttp, s httpServer) func() error {
 	return func() error {
 		var err error
 		if gs.certFile != "" {
@@ -53,7 +48,7 @@ func gracefulServerHttpStart(gs *gracefulServerHttp, s HttpServer) func() error 
 	}
 }
 
-func gracefulServerHttpStop(gs *gracefulServerHttp, s HttpServer) func(ctx context.Context) {
+func gracefulServerHttpStop(gs *gracefulServerHttp, s httpServer) func(ctx context.Context) {
 	return func(ctx context.Context) {
 		slog.Info("[HTTP SERVER] Closing", gs.attrs...)
 		err := s.Shutdown(ctx)
@@ -64,7 +59,7 @@ func gracefulServerHttpStop(gs *gracefulServerHttp, s HttpServer) func(ctx conte
 	}
 }
 
-func gracefulServerHttpForceStop(gs *gracefulServerHttp, s HttpServer) func() {
+func gracefulServerHttpForceStop(gs *gracefulServerHttp, s httpServer) func() {
 	return func() {
 		slog.Info("[HTTP SERVER] Force close", gs.attrs...)
 		err := s.Close()
@@ -74,8 +69,8 @@ func gracefulServerHttpForceStop(gs *gracefulServerHttp, s HttpServer) func() {
 	}
 }
 
-// NewGracefulServerHttp create a new graceful server for http.Server
-func NewGracefulServerHttp(s HttpServer, opts ...OptionGracefulServerHttp) GracefulServer {
+// NewGracefulServerHttp creates a [GracefulServer] for [http.Server] and can use a combination of [WithTLS] and [WithSlogAttrs]
+func NewGracefulServerHttp(s httpServer, opts ...OptionGracefulServerHttp) GracefulServer {
 	if s == nil {
 		return nil
 	}
@@ -95,7 +90,7 @@ func NewGracefulServerHttp(s HttpServer, opts ...OptionGracefulServerHttp) Grace
 	return gs
 }
 
-// WithTLS configure the filenames containing a certificate and matching private key. Look http.Server for more details
+// WithTLS is an [OptionGracefulServerHttp] used to configure the filenames containing a certificate and matching private key.
 func WithTLS(certFile, keyFile string) OptionGracefulServerHttp {
 	return func(gs *gracefulServerHttp) {
 		if certFile != "" && keyFile != "" {
@@ -105,7 +100,7 @@ func WithTLS(certFile, keyFile string) OptionGracefulServerHttp {
 	}
 }
 
-// WithSlogAttrs add information to graceful server log when starting and stopping
+// WithSlogAttrs is an [OptionGracefulServerHttp] used to add multiple [slog.Attr] to the [GracefulServer] handler log
 func WithSlogAttrs(attrs ...slog.Attr) OptionGracefulServerHttp {
 	return func(gs *gracefulServerHttp) {
 		for _, a := range attrs {

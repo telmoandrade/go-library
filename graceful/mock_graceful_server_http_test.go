@@ -16,31 +16,31 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockHttpServer is a mock of HttpServer interface.
-type MockHttpServer struct {
+// MockhttpServer is a mock of httpServer interface.
+type MockhttpServer struct {
 	ctrl     *gomock.Controller
-	recorder *MockHttpServerMockRecorder
+	recorder *MockhttpServerMockRecorder
 }
 
-// MockHttpServerMockRecorder is the mock recorder for MockHttpServer.
-type MockHttpServerMockRecorder struct {
-	mock *MockHttpServer
+// MockhttpServerMockRecorder is the mock recorder for MockhttpServer.
+type MockhttpServerMockRecorder struct {
+	mock *MockhttpServer
 }
 
-// NewMockHttpServer creates a new mock instance.
-func NewMockHttpServer(ctrl *gomock.Controller) *MockHttpServer {
-	mock := &MockHttpServer{ctrl: ctrl}
-	mock.recorder = &MockHttpServerMockRecorder{mock}
+// NewMockhttpServer creates a new mock instance.
+func NewMockhttpServer(ctrl *gomock.Controller) *MockhttpServer {
+	mock := &MockhttpServer{ctrl: ctrl}
+	mock.recorder = &MockhttpServerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockHttpServer) EXPECT() *MockHttpServerMockRecorder {
+func (m *MockhttpServer) EXPECT() *MockhttpServerMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockHttpServer) Close() error {
+func (m *MockhttpServer) Close() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
@@ -48,13 +48,13 @@ func (m *MockHttpServer) Close() error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockHttpServerMockRecorder) Close() *gomock.Call {
+func (mr *MockhttpServerMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockHttpServer)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockhttpServer)(nil).Close))
 }
 
 // ListenAndServe mocks base method.
-func (m *MockHttpServer) ListenAndServe() error {
+func (m *MockhttpServer) ListenAndServe() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListenAndServe")
 	ret0, _ := ret[0].(error)
@@ -62,13 +62,13 @@ func (m *MockHttpServer) ListenAndServe() error {
 }
 
 // ListenAndServe indicates an expected call of ListenAndServe.
-func (mr *MockHttpServerMockRecorder) ListenAndServe() *gomock.Call {
+func (mr *MockhttpServerMockRecorder) ListenAndServe() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenAndServe", reflect.TypeOf((*MockHttpServer)(nil).ListenAndServe))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenAndServe", reflect.TypeOf((*MockhttpServer)(nil).ListenAndServe))
 }
 
 // ListenAndServeTLS mocks base method.
-func (m *MockHttpServer) ListenAndServeTLS(certFile, keyFile string) error {
+func (m *MockhttpServer) ListenAndServeTLS(certFile, keyFile string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListenAndServeTLS", certFile, keyFile)
 	ret0, _ := ret[0].(error)
@@ -76,13 +76,13 @@ func (m *MockHttpServer) ListenAndServeTLS(certFile, keyFile string) error {
 }
 
 // ListenAndServeTLS indicates an expected call of ListenAndServeTLS.
-func (mr *MockHttpServerMockRecorder) ListenAndServeTLS(certFile, keyFile any) *gomock.Call {
+func (mr *MockhttpServerMockRecorder) ListenAndServeTLS(certFile, keyFile any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenAndServeTLS", reflect.TypeOf((*MockHttpServer)(nil).ListenAndServeTLS), certFile, keyFile)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenAndServeTLS", reflect.TypeOf((*MockhttpServer)(nil).ListenAndServeTLS), certFile, keyFile)
 }
 
 // Shutdown mocks base method.
-func (m *MockHttpServer) Shutdown(ctx context.Context) error {
+func (m *MockhttpServer) Shutdown(ctx context.Context) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Shutdown", ctx)
 	ret0, _ := ret[0].(error)
@@ -90,7 +90,7 @@ func (m *MockHttpServer) Shutdown(ctx context.Context) error {
 }
 
 // Shutdown indicates an expected call of Shutdown.
-func (mr *MockHttpServerMockRecorder) Shutdown(ctx any) *gomock.Call {
+func (mr *MockhttpServerMockRecorder) Shutdown(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Shutdown", reflect.TypeOf((*MockHttpServer)(nil).Shutdown), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Shutdown", reflect.TypeOf((*MockhttpServer)(nil).Shutdown), ctx)
 }

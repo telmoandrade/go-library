@@ -5,14 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/telmoandrade/go-library/graceful"
 )
 
 func ExampleNewGracefulServer() {
-	ctx, stop := context.WithCancel(context.Background())
-
 	gs := graceful.NewGracefulShutdown(
 		graceful.WithServers(
 			graceful.NewGracefulServer(
@@ -27,13 +24,7 @@ func ExampleNewGracefulServer() {
 		),
 	)
 
-	go func() {
-		<-time.After(100 * time.Millisecond)
-		stop()
-	}()
-
-	gs.Run(ctx)
-
+	gs.Run(context.Background())
 	// Output:
 	// Server start
 	// Server stop
@@ -41,6 +32,7 @@ func ExampleNewGracefulServer() {
 
 func ExampleNewGracefulServerHttp() {
 	ctx, stop := context.WithCancel(context.Background())
+	stop()
 
 	s := &http.Server{
 		Addr:    "0.0.0.0:8080",
@@ -53,12 +45,6 @@ func ExampleNewGracefulServerHttp() {
 		),
 	)
 
-	go func() {
-		<-time.After(100 * time.Millisecond)
-		stop()
-	}()
-
 	gs.Run(ctx)
-
 	// Output:
 }

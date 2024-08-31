@@ -73,7 +73,7 @@ func Test_gracefulServerHttpStart(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mock := NewMockHttpServer(ctrl)
+			mock := NewMockhttpServer(ctrl)
 			mock.EXPECT().ListenAndServe().Return(tt.args.error).Times(tt.args.callListenAndServe)
 			mock.EXPECT().ListenAndServeTLS(gomock.Any(), gomock.Any()).Return(tt.args.error).Times(tt.args.callListenAndServeTLS)
 
@@ -110,7 +110,7 @@ func Test_gracefulServerHttpStop(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mock := NewMockHttpServer(ctrl)
+			mock := NewMockhttpServer(ctrl)
 			mock.EXPECT().Shutdown(gomock.Any()).Return(tt.args).Times(1)
 
 			gs := NewGracefulServerHttp(mock).(*gracefulServerHttp)
@@ -140,7 +140,7 @@ func Test_gracefulServerHttpForceStop(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mock := NewMockHttpServer(ctrl)
+			mock := NewMockhttpServer(ctrl)
 			mock.EXPECT().Close().Return(tt.args).Times(1)
 
 			gs := NewGracefulServerHttp(mock).(*gracefulServerHttp)
@@ -152,7 +152,7 @@ func Test_gracefulServerHttpForceStop(t *testing.T) {
 func TestNewGracefulServerHttp(t *testing.T) {
 	type args struct {
 		opts       []OptionGracefulServerHttp
-		httpServer HttpServer
+		httpServer httpServer
 	}
 	tests := []struct {
 		name       string
@@ -169,14 +169,14 @@ func TestNewGracefulServerHttp(t *testing.T) {
 		{
 			name: "without option",
 			args: args{
-				httpServer: &MockHttpServer{},
+				httpServer: &MockhttpServer{},
 			},
 			wantIsNull: false,
 		},
 		{
 			name: "with option",
 			args: args{
-				httpServer: &MockHttpServer{},
+				httpServer: &MockhttpServer{},
 				opts: []OptionGracefulServerHttp{
 					func(c *gracefulServerHttp) {},
 				},
@@ -250,7 +250,7 @@ func TestWithTLS(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gs := NewGracefulServerHttp(&MockHttpServer{}, WithTLS(tt.args.certFile, tt.args.keyFile))
+			gs := NewGracefulServerHttp(&MockhttpServer{}, WithTLS(tt.args.certFile, tt.args.keyFile))
 			got := gs.(*gracefulServerHttp)
 
 			if got.certFile != tt.want.certFile {
