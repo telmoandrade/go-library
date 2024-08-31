@@ -81,14 +81,14 @@ func TestWithServers(t *testing.T) {
 			args: nil,
 		},
 		{
-			name: "server nil",
+			name: "GracefulServer nil",
 			args: []GracefulServer{
 				nil,
 			},
 			want: []GracefulServer{},
 		},
 		{
-			name: "1 server",
+			name: "1 GracefulServer",
 			args: []GracefulServer{
 				&MockGracefulServer{},
 			},
@@ -101,7 +101,7 @@ func TestWithServers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gs := NewGracefulShutdown(WithServers(tt.args...))
 
-			if got := gs.servers; !reflect.DeepEqual(got, tt.want) {
+			if got := gs.gracefulServers; !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("WithServers() = %v, want %v", got, tt.want)
 			}
 		})

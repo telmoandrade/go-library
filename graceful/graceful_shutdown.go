@@ -12,19 +12,19 @@ import (
 
 type (
 	gracefulShutdown struct {
-		ctx       context.Context
-		cancelCtx context.CancelFunc
-		wg        sync.WaitGroup
-		timeout   time.Duration
-		servers   []GracefulServer
-		once      sync.Once
+		ctx             context.Context
+		cancelCtx       context.CancelFunc
+		wg              sync.WaitGroup
+		timeout         time.Duration
+		gracefulServers []GracefulServer
+		once            sync.Once
 	}
 
-	// OptionGracefulShutdown used in [NewGracefulShutdown]
+	// OptionGracefulShutdown are parameters used in [NewGracefulShutdown]
 	OptionGracefulShutdown func(*gracefulShutdown)
 )
 
-// NewGracefulShutdown return a new graceful shutdown manager
+// NewGracefulShutdown returns a handler to ensure graceful shutdown of the application
 func NewGracefulShutdown(opts ...OptionGracefulShutdown) *gracefulShutdown {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
@@ -40,25 +40,27 @@ func NewGracefulShutdown(opts ...OptionGracefulShutdown) *gracefulShutdown {
 	return gs
 }
 
-// WithTimeout sets a timeout to wait for each server to shut down before calling force shutdown
+// WithTimeout is an [OptionGracefulShutdown] used to set a timeout that the graceful shutdown handler will wait before calling GracefulServer.ForceStop
 //
-// If not configured, the time required for the server to stop will be waited.
+// If not set, the graceful shutdown handler will wait for GracefulServer.Stop to complete, regardless of how long it takes.
+//
+// If the graceful shutdown handler calls GracefulServer.ForceStop, it will NOT wait for its call to complete
 func WithTimeout(t time.Duration) OptionGracefulShutdown {
 	return func(gs *gracefulShutdown) { gs.timeout = t }
 }
 
-// WithServers register a list of servers that the manager will handle
+// WithServers is an [OptionGracefulShutdown] used to register the various [GracefulServer]
 func WithServers(servers ...GracefulServer) OptionGracefulShutdown {
 	return func(gs *gracefulShutdown) {
-		gs.servers = slices.Clip(
-			slices.DeleteFunc(servers, func(server GracefulServer) bool {
-				return server == nil
+		gs.gracefulServers = slices.Clip(
+			slices.DeleteFunc(servers, func(s GracefulServer) bool {
+				return s == nil
 			}),
 		)
 	}
 }
 
-func (gs *gracefulShutdown) runServer(server GracefulServer) {
+func (gs *gracefulShutdown) runServer(s GracefulServer) {
 	gs.wg.Add(1)
 
 	go func() {
@@ -70,18 +72,18 @@ func (gs *gracefulShutdown) runServer(server GracefulServer) {
 			showdownCtx, cancelShowdownCtx = context.WithTimeout(showdownCtx, gs.timeout)
 		}
 		go func() {
-			server.Stop(showdownCtx)
+			s.Stop(showdownCtx)
 			cancelShowdownCtx()
 		}()
 
 		<-showdownCtx.Done()
 		if errors.Is(showdownCtx.Err(), context.DeadlineExceeded) {
-			go server.ForceStop()
+			go s.ForceStop()
 		}
 	}()
 
 	go func() {
-		if err := server.Start(); err != nil {
+		if err := s.Start(); err != nil {
 			gs.cancelCtx()
 		}
 	}()
@@ -89,13 +91,13 @@ func (gs *gracefulShutdown) runServer(server GracefulServer) {
 
 // Run start all servers and wait for them to close
 func (gs *gracefulShutdown) Run(ctx context.Context) {
-	if len(gs.servers) == 0 {
+	if len(gs.gracefulServers) == 0 {
 		return
 	}
 
 	gs.once.Do(func() {
-		for _, server := range gs.servers {
-			gs.runServer(server)
+		for _, s := range gs.gracefulServers {
+			gs.runServer(s)
 		}
 
 		signalCtx, cancelCtx := signal.NotifyContext(ctx, os.Interrupt)

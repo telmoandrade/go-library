@@ -13,18 +13,18 @@ type (
 		forceStop func()
 	}
 
-	// GracefulServer used in [WithServers]
+	// GracefulServer is a required interface to be used as a parameter in [WithServers]
 	GracefulServer interface {
 		Start() error
 		Stop(context.Context)
 		ForceStop()
 	}
 
-	// OptionGracefulServer used in [NewGracefulServer]
+	// OptionGracefulServer are parameters used in [NewGracefulServer]
 	OptionGracefulServer func(*gracefulServer)
 )
 
-// NewGracefulServer [GracefulServer] wrapper, create a new server for graceful shutdown
+// NewGracefulServer allows you to create a [GracefulServer] and can use a combination of [WithStart], [WithStop] and [WithForceStop]
 func NewGracefulServer(opts ...OptionGracefulServer) GracefulServer {
 	gs := &gracefulServer{
 		start:     func() error { return nil },
@@ -39,7 +39,7 @@ func NewGracefulServer(opts ...OptionGracefulServer) GracefulServer {
 	return gs
 }
 
-// WithStart used to define a function to start the server
+// WithStart is an [OptionGracefulServer] used to define the function to start the [GracefulServer]
 func WithStart(f func() error) OptionGracefulServer {
 	return func(gs *gracefulServer) {
 		if f != nil {
@@ -48,7 +48,7 @@ func WithStart(f func() error) OptionGracefulServer {
 	}
 }
 
-// WithStop used to define a function to stop the server
+// WithStop is an [OptionGracefulServer] used to define the function to stop the [GracefulServer]
 func WithStop(f func(context.Context)) OptionGracefulServer {
 	return func(gs *gracefulServer) {
 		if f != nil {
@@ -57,7 +57,7 @@ func WithStop(f func(context.Context)) OptionGracefulServer {
 	}
 }
 
-// WithForceStop used to define a function to forcibly stop the server
+// WithForceStop is an [OptionGracefulServer] used to define the function to forcefully stop the [GracefulServer]
 func WithForceStop(f func()) OptionGracefulServer {
 	return func(gs *gracefulServer) {
 		if f != nil {
@@ -66,11 +66,11 @@ func WithForceStop(f func()) OptionGracefulServer {
 	}
 }
 
-// Start returns the implemented function to start a server
+// Start returns the implemented function to start a [GracefulServer]
 func (gs *gracefulServer) Start() error { return gs.start() }
 
-// Stop returns the implemented function to stop a server
+// Stop returns the implemented function to stop a [GracefulServer]
 func (gs *gracefulServer) Stop(ctx context.Context) { gs.stop(ctx) }
 
-// ForceStop returns the implemented function to forcibly stop a server
+// ForceStop returns the implemented function to forcibly stop a [GracefulServer]
 func (gs *gracefulServer) ForceStop() { gs.forceStop() }

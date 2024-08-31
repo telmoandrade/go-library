@@ -1,19 +1,18 @@
-// Package graceful implements functions to manipulate graceful shutdown.
+// Package graceful implements functions for handling graceful shutdown.
 //
-// The [NewGracefulShutdown] function creates a graceful shutdown manager.
+// The [NewGracefulShutdown] function creates a graceful shutdown handler.
 //
-// graceful shutdown [Run]
-// - starts each registered server
-// - will wait for an interruption signal
-// - stops running each server
-// - will wait for all servers to finish
+// Life cycle: graceful shutdown handler
+//   - calls the function to start each [GracefulServer]
+//   - if there is an error starting someone [GracefulServer], the graceful shutdown handler will initiate its shutdown
+//   - will wait for an interrupt signal
+//   - after an interrupt signal, calls the function to stop each [GracefulServer]
+//   - will wait for all [GracefulServer] to stop (respecting timeout if configured)
 //
-// if there is an error when starting a server, the manager will be informed that it must be shut down
-//
-// each server
-// - will wait for the manager to signal its shutdown
-// - stop the server
-// - will wait for the server to shut down
-// - if the timeout is configured, it will forcibly stop the server (it will not wait for this process)
-// - informs the manager that the server has been shut down
+// Life cycle: each [GracefulServer]
+//   - will wait for the graceful shutdown handler to signal its shutdown
+//   - call the function to stop the [GracefulServer]
+//   - will wait for the [GracefulServer] to shut down
+//   - if timeout is set, it will call the function to forcibly stop [GracefulServer] (it will not wait for this process)
+//   - informs the graceful shutdown handler that the [GracefulServer] has been shut down
 package graceful
