@@ -1,30 +1,38 @@
-// Package httpserver implements functions to extend the use of the http.Server standard library.
+// Package httpserver extends the functionality of the standard library [http.Server].
+//
+// # Key Features:
+//   - Manage routing paths, middleware registration, and handler registrations of the standard library [http.Server].
+//   - Some built-in middleware.
 //
 // # ServeMux
 //
-// [ServeMux] is an extension with new methods for [http.ServeMux] is a multiplexer for HTTP requests.
-// use [NewServeMux] allocates and returns a new ServeMux.
+// ServeMux extends [http.Handler] designed to manage routing paths, middleware registration,
+// and handler registrations of the standard library [http.Server].
+// It serves as a versatile routing mechanism that can handle middleware and nested routers efficiently.
 //
-// Stores routing path to register middlewares and handlers.
+// Methods for adding middleware:
+//   - [ServeMux.Use]: Appends one or more middlewares.
+//   - [ServeMux.With]: Appends one or more middlewares and register the [Handle] inline.
 //
-// Methods for helping routing path and registering middlewares:
-//   - [ServeMux.Use] appends one or more middlewares onto the Router stack.
-//   - [ServeMux.With] adds inline middlewares for registers the handler.
-//   - [ServeMux.Group] adds a new inline-Router along the current routing path + /pattern, with middleware stack.
-//   - [ServeMux.Route] mounts a sub-Router along the current routing path + /pattern, with middleware stack.
-//   - [ServeMux.Mount] attaches another http.ServeMux along a /pattern/*.
+// Methods for managing the routing path:
+//   - [ServeMux.Group]: Inline router manager, inheriting the middleware stack.
+//   - [ServeMux.Route]: Subrouter manager, inheriting the middleware stack.
+//   - [ServeMux.Mount]: Attaches external routers or handlers.
 //
-// WARNING: Avoid using [ServeMux.Mount], because it is slower to resolve the multiplexer for HTTP requests.
+// Methods for registering an http handler:
+//   - [ServeMux.Connect]: Registers a handler for the HTTP CONNECT method.
+//   - [ServeMux.Delete]: Registers a handler for the HTTP DELETE method.
+//   - [ServeMux.Get]: Registers a handler for the HTTP GET method.
+//   - [ServeMux.Head]: Registers a handler for the HTTP HEAD method.
+//   - [ServeMux.Options]: Registers a handler for the HTTP OPTIONS method.
+//   - [ServeMux.Patch]: Registers a handler for the HTTP PATCH method.
+//   - [ServeMux.Post]: Registers a handler for the HTTP POST method.
+//   - [ServeMux.Put]: Registers a handler for the HTTP PUT method.
+//   - [ServeMux.Trace]: Registers a handler for the HTTP TRACE method.
+//   - [ServeMux.Method]: Registers a handler for the custom HTTP method.
 //
-// Methods for registering handler  along the current routing path + /pattern:
-//   - [ServeMux.Connect] with http method CONNECT
-//   - [ServeMux.Delete] with http method DELETE
-//   - [ServeMux.Get] with http method GET
-//   - [ServeMux.Head] with http method HEAD
-//   - [ServeMux.Options] with http method OPTIONS
-//   - [ServeMux.Patch] with http method PATCH
-//   - [ServeMux.Post] with http method POST
-//   - [ServeMux.Put] with http method PUT
-//   - [ServeMux.Trace] with http method TRACE
-//   - [ServeMux.Method] with custom http method by parameter
+// # Middlewares
+//   - [MiddlewareLogging]: Logs each incoming request along with useful metadata regarding the request.
+//   - [MiddlewareRecover]: Recovers from panics, logs the panic, and responds with an HTTP status of 500 (Internal Server Error).
+//   - [MiddlewareTelemetryTag]: Adds attributes to spans and metrics for telemetry purposes.
 package httpserver

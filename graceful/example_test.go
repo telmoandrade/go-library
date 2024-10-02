@@ -5,9 +5,25 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/telmoandrade/go-library/graceful"
 )
+
+func ExampleNewGracefulShutdown() {
+	gs := graceful.NewGracefulShutdown(
+		graceful.WithServers(
+		// ...
+		),
+		graceful.WithServers(
+		// ...
+		),
+		graceful.WithTimeout(time.Second*10),
+	)
+
+	gs.Run(context.Background())
+	// Output:
+}
 
 func ExampleNewGracefulServer() {
 	gs := graceful.NewGracefulShutdown(

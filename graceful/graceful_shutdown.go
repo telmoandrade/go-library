@@ -18,19 +18,33 @@ type (
 		timeout         time.Duration
 		gracefulServers []GracefulServer
 		once            sync.Once
+		notifyShutdown  func()
 	}
 
-	// OptionGracefulShutdown are parameters used in [NewGracefulShutdown]
+	// GracefulShutdown is responsible for managing the lifecycle of the graceful shutdown handler, overseeing the startup, shutdown,
+	// and completion of multiple servers in an organized and predictable manner.
+	GracefulShutdown interface {
+		// Runs executes the server startup and shutdown process, handling a life cycle of all servers.
+		// If the context used to control the shutdown process signals a timeout or cancellation, GracefulShutdown will initiate a graceful shutdown.
+		//
+		// Starts all registered servers and waits for them to close gracefully.
+		Run(ctx context.Context)
+	}
+
+	// OptionGracefulShutdown is used to apply configurations to a [GracefulShutdown] when creating it with [NewGracefulShutdown].
 	OptionGracefulShutdown func(*gracefulShutdown)
 )
 
-// NewGracefulShutdown returns a handler to ensure graceful shutdown of the application
-func NewGracefulShutdown(opts ...OptionGracefulShutdown) *gracefulShutdown {
+// NewGracefulShutdown returns a new [GracefulShutdown] handler to ensure graceful shutdown of the application.
+// A variadic set of options that can configure the behavior of the shutdown handler.
+func NewGracefulShutdown(opts ...OptionGracefulShutdown) GracefulShutdown {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	gs := &gracefulShutdown{
-		ctx:       ctx,
-		cancelCtx: cancelCtx,
+		ctx:             ctx,
+		cancelCtx:       cancelCtx,
+		gracefulServers: []GracefulServer{},
+		notifyShutdown:  func() {},
 	}
 
 	for _, opt := range opts {
@@ -40,23 +54,34 @@ func NewGracefulShutdown(opts ...OptionGracefulShutdown) *gracefulShutdown {
 	return gs
 }
 
-// WithTimeout is an [OptionGracefulShutdown] used to set a timeout that the graceful shutdown handler will wait before calling GracefulServer.ForceStop
+// WithTimeout is an [OptionGracefulShutdown] that this option sets the timeout period the graceful
+// shutdown handler will wait before forcibly terminating the servers.
 //
-// If not set, the graceful shutdown handler will wait for GracefulServer.Stop to complete, regardless of how long it takes.
-//
-// If the graceful shutdown handler calls GracefulServer.ForceStop, it will NOT wait for its call to complete
+// Default Behavior:
+//   - If the timeout is set to 0, the handler will wait indefinitely for the [GracefulServer.Stop] method to complete.
 func WithTimeout(t time.Duration) OptionGracefulShutdown {
 	return func(gs *gracefulShutdown) { gs.timeout = t }
 }
 
-// WithServers is an [OptionGracefulShutdown] used to register the various [GracefulServer]
+// WithServers is an [OptionGracefulShutdown] that adds a variable list of servers that the graceful shutdown handler will manage.
+// Servers must implement the [GracefulServer] interface.
 func WithServers(servers ...GracefulServer) OptionGracefulShutdown {
 	return func(gs *gracefulShutdown) {
 		gs.gracefulServers = slices.Clip(
-			slices.DeleteFunc(servers, func(s GracefulServer) bool {
+			slices.DeleteFunc(append(gs.gracefulServers, servers...), func(s GracefulServer) bool {
 				return s == nil
 			}),
 		)
+	}
+}
+
+// WithNotifyShutdown is an [OptionGracefulShutdown] that defines the function to notify the shutdown process begins.
+// The function that will be invoked to notify the shutdown process begins.
+func WithNotifyShutdown(fn func()) OptionGracefulShutdown {
+	return func(gs *gracefulShutdown) {
+		if fn != nil {
+			gs.notifyShutdown = fn
+		}
 	}
 }
 
@@ -78,7 +103,7 @@ func (gs *gracefulShutdown) runServer(s GracefulServer) {
 
 		<-showdownCtx.Done()
 		if errors.Is(showdownCtx.Err(), context.DeadlineExceeded) {
-			go s.ForceStop()
+			s.ForceStop()
 		}
 	}()
 
@@ -89,19 +114,22 @@ func (gs *gracefulShutdown) runServer(s GracefulServer) {
 	}()
 }
 
-// Run start all servers and wait for them to close
 func (gs *gracefulShutdown) Run(ctx context.Context) {
 	if len(gs.gracefulServers) == 0 {
 		return
 	}
 
 	gs.once.Do(func() {
+		go func() {
+			<-gs.ctx.Done()
+			gs.notifyShutdown()
+		}()
+
 		for _, s := range gs.gracefulServers {
 			gs.runServer(s)
 		}
 
 		signalCtx, cancelCtx := signal.NotifyContext(ctx, os.Interrupt)
-		defer cancelCtx()
 
 		go func() {
 			<-gs.ctx.Done()

@@ -2,6 +2,7 @@ package httpserver_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,6 +24,31 @@ func middlewareEmpty(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 	})
+}
+
+func testRequest(t *testing.T, ts *httptest.Server, method, path string, payload io.Reader) (int, string) {
+	req, err := http.NewRequest(method, ts.URL+path, payload)
+	if err != nil {
+		t.Fatal(err)
+		return 0, ""
+	}
+
+	req.Host = "www.example.com"
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+		return 0, ""
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+		return 0, ""
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode, string(respBody)
 }
 
 func TestServeMux_Use(t *testing.T) {
@@ -93,33 +119,69 @@ func TestServeMux_With(t *testing.T) {
 }
 
 func TestServeMux_Group(t *testing.T) {
+	type args struct {
+		method string
+		host   string
+		id     int
+	}
 	tests := []struct {
 		name string
-		args int
+		args args
 		want string
 	}{
 		{
 			name: "get user id 1",
-			args: 1,
+			args: args{
+				method: "GET",
+				id:     1,
+			},
 			want: "GET /user/{id} ID:1",
 		},
 		{
+			name: "get user id 1 - no method",
+			args: args{
+				method: "",
+				id:     1,
+			},
+			want: "/user/{id} ID:1",
+		},
+		{
 			name: "get user id 2",
-			args: 2,
+			args: args{
+				method: "GET",
+				id:     2,
+			},
 			want: "GET /user/{id} ID:2",
+		},
+		{
+			name: "get user id 1 hosted",
+			args: args{
+				method: "GET",
+				host:   "www.example.com",
+				id:     1,
+			},
+			want: "GET www.example.com/user/{id} ID:1",
+		},
+		{
+			name: "get user id 1 hosted - no method",
+			args: args{
+				method: "",
+				host:   "www.example.com",
+				id:     1,
+			},
+			want: "www.example.com/user/{id} ID:1",
 		},
 	}
 	for _, tt := range tests {
 		mux := httpserver.NewServeMux()
-		muxUser := mux.Group("/user")
-
-		muxUser.Get("/{id}", handlerId(t))
+		muxUser := mux.Group(fmt.Sprintf("%v%v", tt.args.host, "/user"))
+		muxUser.Method(tt.args.method, "/{id}", handlerId(t))
 
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args), nil)
+			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
 			if got != tt.want {
 				t.Errorf("ServeMux.Group() = %v, want %v", got, tt.want)
 			}
@@ -128,33 +190,68 @@ func TestServeMux_Group(t *testing.T) {
 }
 
 func TestServeMux_Route(t *testing.T) {
+	type args struct {
+		method string
+		host   string
+		id     int
+	}
 	tests := []struct {
 		name string
-		args int
+		args args
 		want string
 	}{
 		{
 			name: "get user id 1",
-			args: 1,
+			args: args{
+				method: "GET",
+				id:     1,
+			},
 			want: "GET /user/{id} ID:1",
 		},
 		{
+			name: "get user id 1 - no method",
+			args: args{
+				id: 1,
+			},
+			want: "/user/{id} ID:1",
+		},
+		{
 			name: "get user id 2",
-			args: 2,
+			args: args{
+				method: "GET",
+				id:     2,
+			},
 			want: "GET /user/{id} ID:2",
+		},
+		{
+			name: "get user id 1 hosted",
+			args: args{
+				method: "GET",
+				host:   "www.example.com",
+				id:     1,
+			},
+			want: "GET www.example.com/user/{id} ID:1",
+		},
+		{
+			name: "get user id 1 hosted - no method",
+			args: args{
+				host: "www.example.com",
+				id:   1,
+			},
+			want: "www.example.com/user/{id} ID:1",
 		},
 	}
 	for _, tt := range tests {
 		mux := httpserver.NewServeMux()
-		mux.Route("/user", func(muxUser httpserver.Router) {
-			muxUser.Get("/{id}", handlerId(t))
+		mux.Route(fmt.Sprintf("%v%v", tt.args.host, "/user"), func(muxUser httpserver.Router) {
+			muxUser.Method(tt.args.method, "/{id}", handlerId(t))
 		})
 
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args), nil)
+			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
 			if got != tt.want {
 				t.Errorf("ServeMux.Route() = %v, want %v", got, tt.want)
 			}
@@ -163,36 +260,174 @@ func TestServeMux_Route(t *testing.T) {
 }
 
 func TestServeMux_Mount(t *testing.T) {
+	type args struct {
+		method string
+		host   string
+		id     int
+	}
 	tests := []struct {
 		name string
-		args int
+		args args
 		want string
 	}{
 		{
 			name: "get user id 1",
-			args: 1,
-			want: "GET /{id} ID:1",
+			args: args{
+				method: "GET",
+				id:     1,
+			},
+			want: "GET /user/{id} ID:1",
+		},
+		{
+			name: "get user id 1 - no method",
+			args: args{
+				id: 1,
+			},
+			want: "/user/{id} ID:1",
 		},
 		{
 			name: "get user id 2",
-			args: 2,
-			want: "GET /{id} ID:2",
+			args: args{
+				method: "GET",
+				id:     2,
+			},
+			want: "GET /user/{id} ID:2",
+		},
+		{
+			name: "get user id 1 hosted",
+			args: args{
+				method: "GET",
+				host:   "www.example.com",
+				id:     1,
+			},
+			want: "GET www.example.com/user/{id} ID:1",
+		},
+		{
+			name: "get user id 1 hosted - no method",
+			args: args{
+				host: "www.example.com",
+				id:   1,
+			},
+			want: "www.example.com/user/{id} ID:1",
 		},
 	}
 	for _, tt := range tests {
 		muxUser := httpserver.NewServeMux()
-		muxUser.Get("/{id}", handlerId(t))
+		muxUser.Method(tt.args.method, "/{id}", handlerId(t))
 
 		mux := httpserver.NewServeMux()
-		mux.Mount("/user", muxUser)
+		mux.Mount(fmt.Sprintf("%v%v", tt.args.host, "/user"), muxUser)
 
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args), nil)
+			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
 			if got != tt.want {
 				t.Errorf("ServeMux.Mount() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServeMux_RouteMount(t *testing.T) {
+	type args struct {
+		method    string
+		hostRoute string
+		hostMount string
+		id        int
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "get user id 1",
+			args: args{
+				method: "GET",
+				id:     1,
+			},
+			want: "GET /user/admin/{id} ID:1",
+		},
+		{
+			name: "get user id 2",
+			args: args{
+				method: "GET",
+				id:     2,
+			},
+			want: "GET /user/admin/{id} ID:2",
+		},
+		{
+			name: "get user id 1 hosted route",
+			args: args{
+				method:    "GET",
+				hostRoute: "www.example.com",
+				id:        1,
+			},
+			want: "GET www.example.com/user/admin/{id} ID:1",
+		},
+		{
+			name: "get user id 1 hosted mount",
+			args: args{
+				method:    "GET",
+				hostMount: "www.example.com",
+				id:        1,
+			},
+			want: "GET www.example.com/user/admin/{id} ID:1",
+		},
+		{
+			name: "get user id 1 hosted",
+			args: args{
+				method:    "GET",
+				hostRoute: "www.example.com",
+				hostMount: "www.example.com",
+				id:        1,
+			},
+			want: "GET www.example.com/user/admin/{id} ID:1",
+		},
+	}
+	for _, tt := range tests {
+		mux := httpserver.NewServeMux()
+		mux.Route(fmt.Sprintf("%v%v", tt.args.hostRoute, "/user"), func(muxUser httpserver.Router) {
+			muxAdmin := httpserver.NewServeMux()
+			muxAdmin.Method(tt.args.method, "/{id}", handlerId(t))
+
+			muxUser.Mount(fmt.Sprintf("%v%v", tt.args.hostMount, "/admin"), muxAdmin)
+		})
+
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		t.Run(fmt.Sprintf("route->mount: %v", tt.name), func(t *testing.T) {
+			status, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
+			if status != 200 {
+				t.Errorf("status = %v, want %v", status, 200)
+			}
+			if got != tt.want {
+				t.Errorf("mux = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	for _, tt := range tests {
+		mux := httpserver.NewServeMux()
+		muxUser := httpserver.NewServeMux()
+		mux.Mount(fmt.Sprintf("%v%v", tt.args.hostMount, "/user"), muxUser)
+
+		muxUser.Route(fmt.Sprintf("%v%v", tt.args.hostRoute, "/admin"), func(muxAdmin httpserver.Router) {
+			muxAdmin.Method(tt.args.method, "/{id}", handlerId(t))
+		})
+
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		t.Run(fmt.Sprintf("mount->route: %v", tt.name), func(t *testing.T) {
+			status, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
+			if status != 200 {
+				t.Errorf("status = %v, want %v", status, 200)
+			}
+			if got != tt.want {
+				t.Errorf("mux = %v, want %v", got, tt.want)
 			}
 		})
 	}

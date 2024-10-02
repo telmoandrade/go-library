@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/telmoandrade/go-library/httpserver"
+	"github.com/telmoandrade/go-library/logger"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func handlerHello(w http.ResponseWriter, r *http.Request) {
@@ -175,4 +179,73 @@ func ExampleServeMux_Method() {
 	mux := httpserver.NewServeMux()
 	mux.Method("CUSTOM", "/pattern", handler)
 	// Output:
+}
+
+func ExampleMiddlewareLogging() {
+	slog.SetDefault(logger.NewLogger(
+		logger.WithMinLevel(slog.LevelInfo),
+		logger.WithHandler(otelslog.NewHandler("")),
+	))
+
+	mux := httpserver.NewServeMux()
+	mux.Use(
+		httpserver.MiddlewareLogging,
+		httpserver.MiddlewareRecover,
+		otelhttp.NewMiddleware(""),
+		httpserver.MiddlewareTelemetryTag,
+	)
+	mux.Get("/hello", handlerHello)
+
+	s := &http.Server{
+		Addr:    "0.0.0.0:8080",
+		Handler: mux,
+	}
+	fmt.Print(s != nil)
+	// Output: true
+}
+
+func ExampleMiddlewareRecover() {
+	slog.SetDefault(logger.NewLogger(
+		logger.WithMinLevel(slog.LevelInfo),
+		logger.WithHandler(otelslog.NewHandler("")),
+	))
+
+	mux := httpserver.NewServeMux()
+	mux.Use(
+		httpserver.MiddlewareLogging,
+		httpserver.MiddlewareRecover,
+		otelhttp.NewMiddleware(""),
+		httpserver.MiddlewareTelemetryTag,
+	)
+	mux.Get("/hello", handlerHello)
+
+	s := &http.Server{
+		Addr:    "0.0.0.0:8080",
+		Handler: mux,
+	}
+	fmt.Print(s != nil)
+	// Output: true
+}
+
+func ExampleMiddlewareTelemetryTag() {
+	slog.SetDefault(logger.NewLogger(
+		logger.WithMinLevel(slog.LevelInfo),
+		logger.WithHandler(otelslog.NewHandler("")),
+	))
+
+	mux := httpserver.NewServeMux()
+	mux.Use(
+		httpserver.MiddlewareLogging,
+		httpserver.MiddlewareRecover,
+		otelhttp.NewMiddleware(""),
+		httpserver.MiddlewareTelemetryTag,
+	)
+	mux.Get("/hello", handlerHello)
+
+	s := &http.Server{
+		Addr:    "0.0.0.0:8080",
+		Handler: mux,
+	}
+	fmt.Print(s != nil)
+	// Output: true
 }
