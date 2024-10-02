@@ -1,17 +1,21 @@
 package graceful
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
+	"net/http"
 	"testing"
 
 	gomock "go.uber.org/mock/gomock"
 )
 
 func Test_gracefulServerHttpStart(t *testing.T) {
-	slog.SetLogLoggerLevel(slog.Level(16))
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
 
 	errMock := errors.New("error")
 
@@ -77,10 +81,8 @@ func Test_gracefulServerHttpStart(t *testing.T) {
 			mock.EXPECT().ListenAndServe().Return(tt.args.error).Times(tt.args.callListenAndServe)
 			mock.EXPECT().ListenAndServeTLS(gomock.Any(), gomock.Any()).Return(tt.args.error).Times(tt.args.callListenAndServeTLS)
 
-			gs := NewGracefulServerHttp(
-				mock,
-				WithTLS(tt.args.certFile, tt.args.keyFile),
-			).(*gracefulServerHttp)
+			gs := &gracefulServerHttp{}
+			WithTLS(tt.args.certFile, tt.args.keyFile)(gs)
 			err := gracefulServerHttpStart(gs, mock)()
 			if err != tt.want {
 				t.Errorf("gracefulServerHttpStart() = %v, want %v", err, tt.want)
@@ -90,7 +92,8 @@ func Test_gracefulServerHttpStart(t *testing.T) {
 }
 
 func Test_gracefulServerHttpStop(t *testing.T) {
-	slog.SetLogLoggerLevel(slog.Level(16))
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
 
 	tests := []struct {
 		name string
@@ -113,14 +116,15 @@ func Test_gracefulServerHttpStop(t *testing.T) {
 			mock := NewMockhttpServer(ctrl)
 			mock.EXPECT().Shutdown(gomock.Any()).Return(tt.args).Times(1)
 
-			gs := NewGracefulServerHttp(mock).(*gracefulServerHttp)
+			gs := &gracefulServerHttp{}
 			gracefulServerHttpStop(gs, mock)(context.Background())
 		})
 	}
 }
 
 func Test_gracefulServerHttpForceStop(t *testing.T) {
-	slog.SetLogLoggerLevel(slog.Level(16))
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
 
 	tests := []struct {
 		name string
@@ -143,7 +147,7 @@ func Test_gracefulServerHttpForceStop(t *testing.T) {
 			mock := NewMockhttpServer(ctrl)
 			mock.EXPECT().Close().Return(tt.args).Times(1)
 
-			gs := NewGracefulServerHttp(mock).(*gracefulServerHttp)
+			gs := &gracefulServerHttp{}
 			gracefulServerHttpForceStop(gs, mock)()
 		})
 	}
@@ -152,7 +156,7 @@ func Test_gracefulServerHttpForceStop(t *testing.T) {
 func TestNewGracefulServerHttp(t *testing.T) {
 	type args struct {
 		opts       []OptionGracefulServerHttp
-		httpServer httpServer
+		httpServer *http.Server
 	}
 	tests := []struct {
 		name       string
@@ -169,14 +173,14 @@ func TestNewGracefulServerHttp(t *testing.T) {
 		{
 			name: "without option",
 			args: args{
-				httpServer: &MockhttpServer{},
+				httpServer: &http.Server{},
 			},
 			wantIsNull: false,
 		},
 		{
 			name: "with option",
 			args: args{
-				httpServer: &MockhttpServer{},
+				httpServer: &http.Server{},
 				opts: []OptionGracefulServerHttp{
 					func(c *gracefulServerHttp) {},
 				},
@@ -250,14 +254,14 @@ func TestWithTLS(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gs := NewGracefulServerHttp(&MockhttpServer{}, WithTLS(tt.args.certFile, tt.args.keyFile))
-			got := gs.(*gracefulServerHttp)
+			gs := &gracefulServerHttp{}
+			WithTLS(tt.args.certFile, tt.args.keyFile)(gs)
 
-			if got.certFile != tt.want.certFile {
-				t.Errorf("certFile = %v, want %v", got.certFile, tt.want.certFile)
+			if gs.certFile != tt.want.certFile {
+				t.Errorf("certFile = %v, want %v", gs.certFile, tt.want.certFile)
 			}
-			if got.keyFile != tt.want.keyFile {
-				t.Errorf("keyFile = %v, want %v", got.keyFile, tt.want.keyFile)
+			if gs.keyFile != tt.want.keyFile {
+				t.Errorf("keyFile = %v, want %v", gs.keyFile, tt.want.keyFile)
 			}
 		})
 	}
