@@ -241,7 +241,7 @@ func joinPattern(prefix, suffix string) string {
 		suffixPattern = fmt.Sprintf("/%s", suffixSplited[1])
 	}
 
-	pattern := path.Join(hostPattern, path.Join(prefixPattern, suffixPattern))
+	pattern := path.Join(hostPattern, prefixPattern, suffixPattern)
 
 	return pattern
 }
