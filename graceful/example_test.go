@@ -51,8 +51,12 @@ func ExampleNewGracefulServerHttp() {
 	stop()
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: &http.ServeMux{},
+		Addr:              "0.0.0.0:8080",
+		Handler:           &http.ServeMux{},
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 
 	gs := graceful.NewGracefulShutdown(

@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/telmoandrade/go-library/httpserver"
 	"github.com/telmoandrade/go-library/logger"
@@ -51,8 +52,12 @@ func ExampleNewServeMux() {
 	mux.Get("/hello", handlerHello)
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:              "0.0.0.0:8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 	fmt.Print(s != nil)
 	// Output: true
@@ -81,8 +86,12 @@ func ExampleServeMux_Group() {
 	muxUser.Put("/{id}", handlerPutUser)
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:              "0.0.0.0:8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 	fmt.Print(s != nil)
 	// Output: true
@@ -97,8 +106,12 @@ func ExampleServeMux_Route() {
 	})
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:              "0.0.0.0:8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 	fmt.Print(s != nil)
 	// Output: true
@@ -114,8 +127,12 @@ func ExampleServeMux_Mount() {
 	mux.Mount("/user", muxUser)
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:              "0.0.0.0:8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 	fmt.Print(s != nil)
 	// Output: true
@@ -191,8 +208,12 @@ func ExampleMiddlewareLogging() {
 	mux.Get("/hello", handlerHello)
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:              "0.0.0.0:8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 	fmt.Print(s != nil)
 	// Output: true
@@ -214,8 +235,12 @@ func ExampleMiddlewareRecover() {
 	mux.Get("/hello", handlerHello)
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:              "0.0.0.0:8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 	fmt.Print(s != nil)
 	// Output: true
@@ -237,8 +262,12 @@ func ExampleMiddlewareTelemetryTag() {
 	mux.Get("/hello", handlerHello)
 
 	s := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
+		Addr:              "0.0.0.0:8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 	fmt.Print(s != nil)
 	// Output: true

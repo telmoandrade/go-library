@@ -45,12 +45,16 @@ func (smr *serveMuxRoute) addMethod(method string) {
 	sort.Strings(smr.allowedMethods)
 }
 
+func (smr *serveMuxRoute) headerAllow(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Allow", strings.Join(smr.allowedMethods, ", "))
+	if smr.maxAge > 0 {
+		w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%v", smr.maxAge))
+	}
+}
+
 func (smr *serveMuxRoute) handlerOptions(w http.ResponseWriter, r *http.Request) {
 	if smr.cors == nil {
-		w.Header().Set("Allow", strings.Join(smr.allowedMethods, ", "))
-		if smr.maxAge > 0 {
-			w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%v", smr.maxAge))
-		}
+		smr.headerAllow(w, r)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -63,10 +67,7 @@ func (smr *serveMuxRoute) middlewareCors(next http.Handler) http.Handler {
 
 			if origin == "" || !smr.cors.isOriginAllowed(r, origin) {
 				if r.Method == http.MethodOptions {
-					w.Header().Set("Allow", strings.Join(smr.allowedMethods, ", "))
-					if smr.maxAge > 0 {
-						w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%v", smr.maxAge))
-					}
+					smr.headerAllow(w, r)
 				}
 				next.ServeHTTP(w, r)
 				return
