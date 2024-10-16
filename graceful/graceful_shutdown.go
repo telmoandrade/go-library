@@ -36,7 +36,7 @@ type (
 )
 
 // NewGracefulShutdown returns a new [GracefulShutdown] handler to ensure graceful shutdown of the application.
-// A variadic set of options that can configure the behavior of the shutdown handler.
+// A variadic set of [OptionGracefulShutdown] that can configure the behavior of the shutdown handler.
 func NewGracefulShutdown(opts ...OptionGracefulShutdown) GracefulShutdown {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 

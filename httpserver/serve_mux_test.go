@@ -26,11 +26,11 @@ func middlewareEmpty(next http.Handler) http.Handler {
 	})
 }
 
-func testRequest(t *testing.T, ts *httptest.Server, method, path string, payload io.Reader) (int, string) {
+func testRequest(t *testing.T, ts *httptest.Server, method, path string, payload io.Reader) (int, http.Header, string) {
 	req, err := http.NewRequest(method, ts.URL+path, payload)
 	if err != nil {
 		t.Fatal(err)
-		return 0, ""
+		return 0, nil, ""
 	}
 
 	req.Host = "www.example.com"
@@ -38,17 +38,47 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, payload
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
-		return 0, ""
+		return 0, nil, ""
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
-		return 0, ""
+		return 0, nil, ""
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode, string(respBody)
+	return resp.StatusCode, resp.Header, string(respBody)
+}
+
+func TestNewServeMux(t *testing.T) {
+	type args struct {
+		opts []httpserver.OptionServeMux
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "without option",
+		},
+		{
+			name: "with option",
+			args: args{
+				opts: []httpserver.OptionServeMux{
+					httpserver.WithHandlerMaxAge(0),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := httpserver.NewServeMux(tt.args.opts...)
+			if got == nil {
+				t.Errorf("NewServeMux() = nil, want != nil")
+			}
+		})
+	}
 }
 
 func TestServeMux_Use(t *testing.T) {
@@ -77,7 +107,7 @@ func TestServeMux_Use(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args), nil)
+			_, _, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args), nil)
 			if got != tt.want {
 				t.Errorf("ServeMux.Use() = %v, want %v", got, tt.want)
 			}
@@ -110,7 +140,7 @@ func TestServeMux_With(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args), nil)
+			_, _, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args), nil)
 			if got != tt.want {
 				t.Errorf("ServeMux.Use() = %v, want %v", got, tt.want)
 			}
@@ -119,6 +149,10 @@ func TestServeMux_With(t *testing.T) {
 }
 
 func TestServeMux_Group(t *testing.T) {
+	type want struct {
+		body           string
+		allowedMethods string
+	}
 	type args struct {
 		method string
 		host   string
@@ -127,7 +161,7 @@ func TestServeMux_Group(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want string
+		want want
 	}{
 		{
 			name: "get user id 1",
@@ -135,7 +169,10 @@ func TestServeMux_Group(t *testing.T) {
 				method: "GET",
 				id:     1,
 			},
-			want: "GET /user/{id} ID:1",
+			want: want{
+				body:           "GET /user/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 - no method",
@@ -143,7 +180,10 @@ func TestServeMux_Group(t *testing.T) {
 				method: "",
 				id:     1,
 			},
-			want: "/user/{id} ID:1",
+			want: want{
+				body:           "/user/{id} ID:1",
+				allowedMethods: "CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE",
+			},
 		},
 		{
 			name: "get user id 2",
@@ -151,7 +191,10 @@ func TestServeMux_Group(t *testing.T) {
 				method: "GET",
 				id:     2,
 			},
-			want: "GET /user/{id} ID:2",
+			want: want{
+				body:           "GET /user/{id} ID:2",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted",
@@ -160,7 +203,10 @@ func TestServeMux_Group(t *testing.T) {
 				host:   "www.example.com",
 				id:     1,
 			},
-			want: "GET www.example.com/user/{id} ID:1",
+			want: want{
+				body:           "GET www.example.com/user/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted - no method",
@@ -169,7 +215,10 @@ func TestServeMux_Group(t *testing.T) {
 				host:   "www.example.com",
 				id:     1,
 			},
-			want: "www.example.com/user/{id} ID:1",
+			want: want{
+				body:           "www.example.com/user/{id} ID:1",
+				allowedMethods: "CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE",
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -181,15 +230,27 @@ func TestServeMux_Group(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
-			if got != tt.want {
+			_, _, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
+			if got != tt.want.body {
 				t.Errorf("ServeMux.Group() = %v, want %v", got, tt.want)
+			}
+
+			statusCode, header, _ := testRequest(t, ts, "OPTIONS", fmt.Sprintf("/user/%d", tt.args.id), nil)
+			if header.Get("Allow") != tt.want.allowedMethods {
+				t.Errorf("header.Allow = %v, want %v", header.Get("Allow"), tt.want.allowedMethods)
+			}
+			if statusCode != http.StatusNoContent {
+				t.Errorf("statusCode = %v, want %v", statusCode, http.StatusNoContent)
 			}
 		})
 	}
 }
 
 func TestServeMux_Route(t *testing.T) {
+	type want struct {
+		body           string
+		allowedMethods string
+	}
 	type args struct {
 		method string
 		host   string
@@ -198,7 +259,7 @@ func TestServeMux_Route(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want string
+		want want
 	}{
 		{
 			name: "get user id 1",
@@ -206,14 +267,20 @@ func TestServeMux_Route(t *testing.T) {
 				method: "GET",
 				id:     1,
 			},
-			want: "GET /user/{id} ID:1",
+			want: want{
+				body:           "GET /user/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 - no method",
 			args: args{
 				id: 1,
 			},
-			want: "/user/{id} ID:1",
+			want: want{
+				body:           "/user/{id} ID:1",
+				allowedMethods: "CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE",
+			},
 		},
 		{
 			name: "get user id 2",
@@ -221,7 +288,10 @@ func TestServeMux_Route(t *testing.T) {
 				method: "GET",
 				id:     2,
 			},
-			want: "GET /user/{id} ID:2",
+			want: want{
+				body:           "GET /user/{id} ID:2",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted",
@@ -230,7 +300,10 @@ func TestServeMux_Route(t *testing.T) {
 				host:   "www.example.com",
 				id:     1,
 			},
-			want: "GET www.example.com/user/{id} ID:1",
+			want: want{
+				body:           "GET www.example.com/user/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted - no method",
@@ -238,7 +311,10 @@ func TestServeMux_Route(t *testing.T) {
 				host: "www.example.com",
 				id:   1,
 			},
-			want: "www.example.com/user/{id} ID:1",
+			want: want{
+				body:           "www.example.com/user/{id} ID:1",
+				allowedMethods: "CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE",
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -251,15 +327,27 @@ func TestServeMux_Route(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
-			if got != tt.want {
+			_, _, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
+			if got != tt.want.body {
 				t.Errorf("ServeMux.Route() = %v, want %v", got, tt.want)
+			}
+
+			statusCode, header, _ := testRequest(t, ts, "OPTIONS", fmt.Sprintf("/user/%d", tt.args.id), nil)
+			if header.Get("Allow") != tt.want.allowedMethods {
+				t.Errorf("header.Allow = %v, want %v", header.Get("Allow"), tt.want.allowedMethods)
+			}
+			if statusCode != http.StatusNoContent {
+				t.Errorf("statusCode = %v, want %v", statusCode, http.StatusNoContent)
 			}
 		})
 	}
 }
 
 func TestServeMux_Mount(t *testing.T) {
+	type want struct {
+		body           string
+		allowedMethods string
+	}
 	type args struct {
 		method string
 		host   string
@@ -268,7 +356,7 @@ func TestServeMux_Mount(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want string
+		want want
 	}{
 		{
 			name: "get user id 1",
@@ -276,14 +364,20 @@ func TestServeMux_Mount(t *testing.T) {
 				method: "GET",
 				id:     1,
 			},
-			want: "GET /user/{id} ID:1",
+			want: want{
+				body:           "GET /user/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 - no method",
 			args: args{
 				id: 1,
 			},
-			want: "/user/{id} ID:1",
+			want: want{
+				body:           "/user/{id} ID:1",
+				allowedMethods: "CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE",
+			},
 		},
 		{
 			name: "get user id 2",
@@ -291,7 +385,10 @@ func TestServeMux_Mount(t *testing.T) {
 				method: "GET",
 				id:     2,
 			},
-			want: "GET /user/{id} ID:2",
+			want: want{
+				body:           "GET /user/{id} ID:2",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted",
@@ -300,7 +397,10 @@ func TestServeMux_Mount(t *testing.T) {
 				host:   "www.example.com",
 				id:     1,
 			},
-			want: "GET www.example.com/user/{id} ID:1",
+			want: want{
+				body:           "GET www.example.com/user/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted - no method",
@@ -308,7 +408,10 @@ func TestServeMux_Mount(t *testing.T) {
 				host: "www.example.com",
 				id:   1,
 			},
-			want: "www.example.com/user/{id} ID:1",
+			want: want{
+				body:           "www.example.com/user/{id} ID:1",
+				allowedMethods: "CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE",
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -322,15 +425,27 @@ func TestServeMux_Mount(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
-			if got != tt.want {
+			_, _, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/%d", tt.args.id), nil)
+			if got != tt.want.body {
 				t.Errorf("ServeMux.Mount() = %v, want %v", got, tt.want)
+			}
+
+			statusCode, header, _ := testRequest(t, ts, "OPTIONS", fmt.Sprintf("/user/%d", tt.args.id), nil)
+			if header.Get("Allow") != tt.want.allowedMethods {
+				t.Errorf("header.Allow = %v, want %v", header.Get("Allow"), tt.want.allowedMethods)
+			}
+			if statusCode != http.StatusNoContent {
+				t.Errorf("statusCode = %v, want %v", statusCode, http.StatusNoContent)
 			}
 		})
 	}
 }
 
 func TestServeMux_RouteMount(t *testing.T) {
+	type want struct {
+		body           string
+		allowedMethods string
+	}
 	type args struct {
 		method    string
 		hostRoute string
@@ -340,7 +455,7 @@ func TestServeMux_RouteMount(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want string
+		want want
 	}{
 		{
 			name: "get user id 1",
@@ -348,7 +463,10 @@ func TestServeMux_RouteMount(t *testing.T) {
 				method: "GET",
 				id:     1,
 			},
-			want: "GET /user/admin/{id} ID:1",
+			want: want{
+				body:           "GET /user/admin/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 2",
@@ -356,7 +474,10 @@ func TestServeMux_RouteMount(t *testing.T) {
 				method: "GET",
 				id:     2,
 			},
-			want: "GET /user/admin/{id} ID:2",
+			want: want{
+				body:           "GET /user/admin/{id} ID:2",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted route",
@@ -365,7 +486,10 @@ func TestServeMux_RouteMount(t *testing.T) {
 				hostRoute: "www.example.com",
 				id:        1,
 			},
-			want: "GET www.example.com/user/admin/{id} ID:1",
+			want: want{
+				body:           "GET www.example.com/user/admin/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted mount",
@@ -374,7 +498,10 @@ func TestServeMux_RouteMount(t *testing.T) {
 				hostMount: "www.example.com",
 				id:        1,
 			},
-			want: "GET www.example.com/user/admin/{id} ID:1",
+			want: want{
+				body:           "GET www.example.com/user/admin/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 		{
 			name: "get user id 1 hosted",
@@ -384,7 +511,10 @@ func TestServeMux_RouteMount(t *testing.T) {
 				hostMount: "www.example.com",
 				id:        1,
 			},
-			want: "GET www.example.com/user/admin/{id} ID:1",
+			want: want{
+				body:           "GET www.example.com/user/admin/{id} ID:1",
+				allowedMethods: "GET, HEAD, OPTIONS",
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -400,12 +530,20 @@ func TestServeMux_RouteMount(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(fmt.Sprintf("route->mount: %v", tt.name), func(t *testing.T) {
-			status, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
+			status, _, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
 			if status != 200 {
 				t.Errorf("status = %v, want %v", status, 200)
 			}
-			if got != tt.want {
+			if got != tt.want.body {
 				t.Errorf("mux = %v, want %v", got, tt.want)
+			}
+
+			statusCode, header, _ := testRequest(t, ts, "OPTIONS", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
+			if header.Get("Allow") != tt.want.allowedMethods {
+				t.Errorf("header.Allow = %v, want %v", header.Get("Allow"), tt.want.allowedMethods)
+			}
+			if statusCode != http.StatusNoContent {
+				t.Errorf("statusCode = %v, want %v", statusCode, http.StatusNoContent)
 			}
 		})
 	}
@@ -422,12 +560,20 @@ func TestServeMux_RouteMount(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(fmt.Sprintf("mount->route: %v", tt.name), func(t *testing.T) {
-			status, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
+			status, _, got := testRequest(t, ts, "GET", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
 			if status != 200 {
 				t.Errorf("status = %v, want %v", status, 200)
 			}
-			if got != tt.want {
+			if got != tt.want.body {
 				t.Errorf("mux = %v, want %v", got, tt.want)
+			}
+
+			statusCode, header, _ := testRequest(t, ts, "OPTIONS", fmt.Sprintf("/user/admin/%d", tt.args.id), nil)
+			if header.Get("Allow") != tt.want.allowedMethods {
+				t.Errorf("header.Allow = %v, want %v", header.Get("Allow"), tt.want.allowedMethods)
+			}
+			if statusCode != http.StatusNoContent {
+				t.Errorf("statusCode = %v, want %v", statusCode, http.StatusNoContent)
 			}
 		})
 	}
@@ -475,7 +621,7 @@ func TestServeMux_Connect(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "CONNECT", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "CONNECT", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -484,6 +630,17 @@ func TestServeMux_Connect(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Connect("/", nil)
+	})
 }
 
 func TestServeMux_Delete(t *testing.T) {
@@ -528,7 +685,7 @@ func TestServeMux_Delete(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "DELETE", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "DELETE", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -537,6 +694,17 @@ func TestServeMux_Delete(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Delete("/", nil)
+	})
 }
 
 func TestServeMux_Get(t *testing.T) {
@@ -581,7 +749,7 @@ func TestServeMux_Get(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "GET", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "GET", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -590,6 +758,17 @@ func TestServeMux_Get(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Get("/", nil)
+	})
 }
 
 func TestServeMux_Head(t *testing.T) {
@@ -634,7 +813,7 @@ func TestServeMux_Head(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "HEAD", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "HEAD", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -643,59 +822,17 @@ func TestServeMux_Head(t *testing.T) {
 			}
 		})
 	}
-}
 
-func TestServeMux_Options(t *testing.T) {
-	type want struct {
-		body       string
-		statusCode int
-	}
-	tests := []struct {
-		name string
-		args string
-		want want
-	}{
-		{
-			name: "user id 1",
-			args: "/user/1",
-			want: want{
-				body:       "OPTIONS /user/{id} ID:1",
-				statusCode: 200,
-			},
-		},
-		{
-			name: "user id 2",
-			args: "/user/2",
-			want: want{
-				body:       "OPTIONS /user/{id} ID:2",
-				statusCode: 200,
-			},
-		}, {
-			name: "client",
-			args: "/client",
-			want: want{
-				body:       "404 page not found\n",
-				statusCode: 404,
-			},
-		},
-	}
-	for _, tt := range tests {
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
 		mux := httpserver.NewServeMux()
-		mux.Options("/user/{id}", handlerId(t))
-
-		ts := httptest.NewServer(mux)
-		defer ts.Close()
-
-		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "OPTIONS", tt.args, nil)
-			if body != tt.want.body {
-				t.Errorf("body = %v, want %v", body, tt.want.body)
-			}
-			if statusCode != tt.want.statusCode {
-				t.Errorf("statusCode = %v, want %v", statusCode, tt.want.statusCode)
-			}
-		})
-	}
+		mux.Head("/", nil)
+	})
 }
 
 func TestServeMux_Patch(t *testing.T) {
@@ -740,7 +877,7 @@ func TestServeMux_Patch(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "PATCH", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "PATCH", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -749,6 +886,17 @@ func TestServeMux_Patch(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Patch("/", nil)
+	})
 }
 
 func TestServeMux_Post(t *testing.T) {
@@ -793,7 +941,7 @@ func TestServeMux_Post(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "POST", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "POST", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -802,6 +950,17 @@ func TestServeMux_Post(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Post("/", nil)
+	})
 }
 
 func TestServeMux_Put(t *testing.T) {
@@ -846,7 +1005,7 @@ func TestServeMux_Put(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "PUT", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "PUT", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -855,6 +1014,17 @@ func TestServeMux_Put(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Put("/", nil)
+	})
 }
 
 func TestServeMux_Trace(t *testing.T) {
@@ -899,7 +1069,7 @@ func TestServeMux_Trace(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "TRACE", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "TRACE", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -908,6 +1078,17 @@ func TestServeMux_Trace(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Trace("/", nil)
+	})
 }
 
 func TestServeMux_Method(t *testing.T) {
@@ -952,7 +1133,7 @@ func TestServeMux_Method(t *testing.T) {
 		defer ts.Close()
 
 		t.Run(tt.name, func(t *testing.T) {
-			statusCode, body := testRequest(t, ts, "CUSTOM", tt.args, nil)
+			statusCode, _, body := testRequest(t, ts, "CUSTOM", tt.args, nil)
 			if body != tt.want.body {
 				t.Errorf("body = %v, want %v", body, tt.want.body)
 			}
@@ -961,6 +1142,28 @@ func TestServeMux_Method(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("http.Handler null", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Method("CUSTOM", "/", nil)
+	})
+
+	t.Run("method OPTIONS", func(t *testing.T) {
+		defer func() {
+			if e := recover(); e == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		mux := httpserver.NewServeMux()
+		mux.Method("OPTIONS", "/", nil)
+	})
 }
 
 func BenchmarkServerMux_Group(b *testing.B) {

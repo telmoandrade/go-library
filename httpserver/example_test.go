@@ -145,12 +145,6 @@ func ExampleServeMux_Head() {
 	// Output:
 }
 
-func ExampleServeMux_Options() {
-	mux := httpserver.NewServeMux()
-	mux.Options("/pattern", handler)
-	// Output:
-}
-
 func ExampleServeMux_Patch() {
 	mux := httpserver.NewServeMux()
 	mux.Patch("/pattern", handler)
