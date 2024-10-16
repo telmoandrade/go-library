@@ -72,6 +72,12 @@ pre-push:
 	@go generate ./...
 	@go fmt ./...
 
+## update-lib:update all go modules
+.PHONY: update-lib
+update-lib:
+	@go get -u ./...
+	@go mod tidy
+
 ## lint:run quality control checks
 .PHONY: lint
 lint:

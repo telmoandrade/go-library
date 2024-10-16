@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"reflect"
 	"strings"
 )
 
@@ -20,8 +21,6 @@ type (
 		Get(pattern string, handlerFn http.HandlerFunc)
 		// Head registers a handler for the HTTP HEAD method, under the current routing path plus the specified pattern.
 		Head(pattern string, handlerFn http.HandlerFunc)
-		// Options registers a handler for the HTTP OPTIONS method, under the current routing path plus the specified pattern.
-		Options(pattern string, handlerFn http.HandlerFunc)
 		// Patch registers a handler for the HTTP PATCH method, under the current routing path plus the specified pattern.
 		Patch(pattern string, handlerFn http.HandlerFunc)
 		// Post registers a handler for the HTTP POST method, under the current routing path plus the specified pattern.
@@ -51,6 +50,11 @@ type (
 		Mount(pattern string, h http.Handler)
 	}
 
+	serveMuxOptions struct {
+		cors   *cors
+		maxAge int
+	}
+
 	// ServeMux extends [http.Handler] designed to manage routing paths, middleware registration,
 	// and handler registrations of the standard library [http.Server].
 	// It serves as a versatile routing mechanism that can handle middleware and nested routers efficiently.
@@ -62,19 +66,45 @@ type (
 		serveMux    *http.ServeMux
 		middlewares []func(http.Handler) http.Handler
 		pattern     string
+		routes      map[string]*serveMuxRoute
+		options     *serveMuxOptions
 	}
 
 	contextKey struct {
 		name string
 	}
+
+	// OptionServeMux is used to apply configurations to a [ServeMux] when creating it with [NewServeMux].
+	OptionServeMux func(*ServeMux)
 )
 
 var contextRoutePath = &contextKey{"routePath"}
 
 // NewServeMux creates and returns a new instance of [ServeMux] with enhanced routing and middleware capabilities.
-func NewServeMux() *ServeMux {
-	return &ServeMux{
+// A variadic set of [OptionServeMux] used to configure the behavior of the [ServeMux].
+func NewServeMux(opts ...OptionServeMux) *ServeMux {
+	mux := &ServeMux{
 		serveMux: http.NewServeMux(),
+		routes:   make(map[string]*serveMuxRoute),
+		options: &serveMuxOptions{
+			maxAge: 86400,
+		},
+	}
+
+	for _, opt := range opts {
+		opt(mux)
+	}
+
+	return mux
+}
+
+// WithHandlerMaxAge is an [OptionServeMux] that defines in seconds the maximum age for the Cache-Control header response in the options method handlers.
+//
+// Default:
+//   - The default maximum age for the Cache-Control header response is 86400 seconds.
+func WithHandlerMaxAge(seconds int) OptionServeMux {
+	return func(mux *ServeMux) {
+		mux.options.maxAge = seconds
 	}
 }
 
@@ -89,6 +119,8 @@ func (mux *ServeMux) With(middlewares ...func(http.Handler) http.Handler) Handle
 		pattern:     mux.pattern,
 		middlewares: append(mux.middlewares, middlewares...),
 		serveMux:    mux.serveMux,
+		routes:      mux.routes,
+		options:     mux.options,
 	}
 }
 
@@ -98,6 +130,8 @@ func (mux *ServeMux) Group(pattern string) Router {
 		pattern:     joinPattern(mux.pattern, pattern),
 		middlewares: mux.middlewares,
 		serveMux:    mux.serveMux,
+		routes:      mux.routes,
+		options:     mux.options,
 	}
 }
 
@@ -108,6 +142,8 @@ func (mux *ServeMux) Route(pattern string, fn func(sub Router)) {
 		pattern:     joinPattern(mux.pattern, pattern),
 		middlewares: mux.middlewares,
 		serveMux:    mux.serveMux,
+		routes:      mux.routes,
+		options:     mux.options,
 	}
 	fn(subRouter)
 
@@ -138,7 +174,24 @@ func (mux *ServeMux) Mount(pattern string, handler http.Handler) {
 }
 
 func (mux *ServeMux) addRoute(method string, pattern string, handlerFn http.Handler) {
+	objValue := reflect.ValueOf(handlerFn)
+	if objValue.IsNil() {
+		panic("http.Handler not defined")
+	}
+
 	targetPattern := joinPattern(mux.pattern, pattern)
+	smr, ok := mux.routes[targetPattern]
+	if !ok {
+		smr = &serveMuxRoute{
+			allowedMethods: []string{},
+			maxAge:         mux.options.maxAge,
+			cors:           mux.options.cors,
+		}
+		mux.routes[targetPattern] = smr
+		mux.addRoute("OPTIONS", pattern, http.HandlerFunc(smr.handlerOptions))
+	}
+	smr.addMethod(method)
+
 	targetHandler := handlerFn
 
 	middlewareAddRoute := func(next http.Handler) http.Handler {
@@ -159,6 +212,7 @@ func (mux *ServeMux) addRoute(method string, pattern string, handlerFn http.Hand
 		targetHandler = mux.middlewares[i](targetHandler)
 	}
 	targetHandler = middlewareAddRoute(targetHandler)
+	targetHandler = smr.middlewareCors(targetHandler)
 
 	mux.serveMux.Handle(strings.TrimSpace(fmt.Sprintf("%s %s", method, targetPattern)), targetHandler)
 }
@@ -183,11 +237,6 @@ func (mux *ServeMux) Head(pattern string, handlerFn http.HandlerFunc) {
 	mux.addRoute("HEAD", pattern, handlerFn)
 }
 
-// Options registers a handler for the HTTP OPTIONS method, under the current routing path plus the specified pattern.
-func (mux *ServeMux) Options(pattern string, handlerFn http.HandlerFunc) {
-	mux.addRoute("OPTIONS", pattern, handlerFn)
-}
-
 // Patch registers a handler for the HTTP PATCH method, under the current routing path plus the specified pattern.
 func (mux *ServeMux) Patch(pattern string, handlerFn http.HandlerFunc) {
 	mux.addRoute("PATCH", pattern, handlerFn)
@@ -210,7 +259,13 @@ func (mux *ServeMux) Trace(pattern string, handlerFn http.HandlerFunc) {
 
 // Method registers a handler for the custom HTTP method, under the current routing path plus the specified pattern.
 func (mux *ServeMux) Method(method, pattern string, handlerFn http.HandlerFunc) {
-	mux.addRoute(strings.ToUpper(method), pattern, handlerFn)
+	method = strings.ToUpper(method)
+
+	if method == "OPTIONS" {
+		panic("OPTIONS method not allowed")
+	}
+
+	mux.addRoute(method, pattern, handlerFn)
 }
 
 // ServeHTTP dispatches the request to the handler whose pattern most closely matches the request URL.

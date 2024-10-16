@@ -71,7 +71,7 @@ func gracefulServerHttpForceStop(gs *gracefulServerHttp, s httpServer) func() {
 
 // NewGracefulServerHttp returns a new [GracefulServer] encapsulating an [http.Server].
 // This allows the HTTP server to be managed within the graceful shutdown framework.
-// A variadic set of options to configure the behavior of the HTTP server.
+// A variadic set of [OptionGracefulServerHttp] to configure the behavior of the HTTP server.
 func NewGracefulServerHttp(s *http.Server, opts ...OptionGracefulServerHttp) GracefulServer {
 	if s == nil {
 		return nil

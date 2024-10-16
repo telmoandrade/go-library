@@ -31,7 +31,7 @@ type (
 )
 
 // NewGracefulServer returns a new [GracefulServer].
-// A variadic set of options for configuring the behavior of the server.
+// A variadic set of [OptionGracefulServer] for configuring the behavior of the server.
 func NewGracefulServer(opts ...OptionGracefulServer) GracefulServer {
 	gs := &gracefulServer{
 		start:     func() error { return nil },

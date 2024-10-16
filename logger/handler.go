@@ -37,13 +37,13 @@ var (
 
 // NewLogger returns a new [slog.Logger].
 // It uses the handler [NewHandler].
-// A variadic set of options used to configure the behavior of the handler.
+// A variadic set of [Option] used to configure the behavior of the handler.
 func NewLogger(opts ...Option) *slog.Logger {
 	return slog.New(NewHandler(opts...))
 }
 
 // NewHandler returns a new handler from [slog.Handler].
-// A variadic set of options used to configure the behavior of the handler.
+// A variadic set of [Option] used to configure the behavior of the handler.
 //
 // Behavior:
 //   - Minimum level control for processing a log, This can be dynamically overridden via context with [ContextMinLevel].

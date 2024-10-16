@@ -10,6 +10,12 @@
 // and handler registrations of the standard library [http.Server].
 // It serves as a versatile routing mechanism that can handle middleware and nested routers efficiently.
 //
+// Automatically handles the OPTIONS method for registered routes, returning allowed methods or preflighted requests in CORS.
+//
+// A variadic set of [OptionServeMux] used to configure the behavior of the [ServeMux]:
+//   - [WithHandlerMaxAge]: Defines in seconds the maximum age for the Cache-Control header response in the options method handlers.
+//   - [WithCors]: Defines information that will be used in the handlers for CORS processing.
+//
 // Methods for adding middleware:
 //   - [ServeMux.Use]: Appends one or more middlewares.
 //   - [ServeMux.With]: Appends one or more middlewares and register the [Handle] inline.
@@ -24,7 +30,6 @@
 //   - [ServeMux.Delete]: Registers a handler for the HTTP DELETE method.
 //   - [ServeMux.Get]: Registers a handler for the HTTP GET method.
 //   - [ServeMux.Head]: Registers a handler for the HTTP HEAD method.
-//   - [ServeMux.Options]: Registers a handler for the HTTP OPTIONS method.
 //   - [ServeMux.Patch]: Registers a handler for the HTTP PATCH method.
 //   - [ServeMux.Post]: Registers a handler for the HTTP POST method.
 //   - [ServeMux.Put]: Registers a handler for the HTTP PUT method.
