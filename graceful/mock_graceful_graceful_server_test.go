@@ -20,6 +20,7 @@ import (
 type MockGracefulServer struct {
 	ctrl     *gomock.Controller
 	recorder *MockGracefulServerMockRecorder
+	isgomock struct{}
 }
 
 // MockGracefulServerMockRecorder is the mock recorder for MockGracefulServer.

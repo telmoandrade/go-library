@@ -2,10 +2,8 @@ package logger_test
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
-	"github.com/google/uuid"
 	"github.com/telmoandrade/go-library/logger"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 )
@@ -34,26 +32,19 @@ func ExampleNewHandler() {
 	// Output:
 }
 
-func ExampleLogIDFromContext() {
-	u := logger.LogIDFromContext(context.Background())
-	fmt.Println(u.String())
-
-	// Output: 00000000-0000-0000-0000-000000000000
-}
-
-func ExampleWithContextLogID() {
+func ExampleLogId() {
 	slog.SetDefault(logger.NewLogger())
 
-	ctx := logger.WithContextLogID(context.Background(), uuid.Must(uuid.NewV7()))
-	slog.DebugContext(ctx, "message debug")
+	ctx, u := logger.LogId(context.Background(), "")
+	slog.DebugContext(ctx, "message debug", slog.String("id", u.String()))
 
 	// Output:
 }
 
-func ExampleWithContextMinLevel() {
+func ExampleMinLevel() {
 	slog.SetDefault(logger.NewLogger())
 
-	ctx := logger.WithContextMinLevel(context.Background(), "info")
+	ctx, _ := logger.MinLevel(context.Background(), "info")
 	slog.DebugContext(ctx, "message debug")
 
 	// Output:

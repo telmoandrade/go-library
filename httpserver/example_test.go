@@ -3,7 +3,6 @@ package httpserver_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"time"
@@ -11,13 +10,10 @@ import (
 	"github.com/telmoandrade/go-library/httpserver"
 	"github.com/telmoandrade/go-library/logger"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func handlerHello(w http.ResponseWriter, r *http.Request) {
-	if _, err := w.Write([]byte("hello")); err != nil {
-		log.Printf("Write failed: %v\n", err)
-	}
+	w.Write([]byte("hello"))
 }
 
 type ctxKey struct {
@@ -48,7 +44,19 @@ func handlerPutUser(w http.ResponseWriter, r *http.Request) {
 func handler(w http.ResponseWriter, r *http.Request) {}
 
 func ExampleNewServeMux() {
+	slog.SetDefault(logger.NewLogger(
+		logger.WithMinLevel(slog.LevelInfo),
+		logger.WithHandler(otelslog.NewHandler("")),
+	))
+
 	mux := httpserver.NewServeMux()
+
+	mux.Use(
+		httpserver.MiddlewareLogging,
+		httpserver.MiddlewareRecover,
+		httpserver.MiddlewareTrace,
+	)
+
 	mux.Get("/hello", handlerHello)
 
 	s := &http.Server{
@@ -117,27 +125,6 @@ func ExampleServeMux_Route() {
 	// Output: true
 }
 
-func ExampleServeMux_Mount() {
-	muxUser := httpserver.NewServeMux()
-	muxUser.Use(middlewarePathValue)
-	muxUser.Get("/{id}", handlerGetUser)
-	muxUser.Put("/{id}", handlerPutUser)
-
-	mux := httpserver.NewServeMux()
-	mux.Mount("/user", muxUser)
-
-	s := &http.Server{
-		Addr:              "0.0.0.0:8080",
-		Handler:           mux,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       30 * time.Second,
-	}
-	fmt.Print(s != nil)
-	// Output: true
-}
-
 func ExampleServeMux_Connect() {
 	mux := httpserver.NewServeMux()
 	mux.Connect("/pattern", handler)
@@ -159,6 +146,12 @@ func ExampleServeMux_Get() {
 func ExampleServeMux_Head() {
 	mux := httpserver.NewServeMux()
 	mux.Head("/pattern", handler)
+	// Output:
+}
+
+func ExampleServeMux_Options() {
+	mux := httpserver.NewServeMux()
+	mux.Options("/pattern", handler)
 	// Output:
 }
 
@@ -190,85 +183,4 @@ func ExampleServeMux_Method() {
 	mux := httpserver.NewServeMux()
 	mux.Method("CUSTOM", "/pattern", handler)
 	// Output:
-}
-
-func ExampleMiddlewareLogging() {
-	slog.SetDefault(logger.NewLogger(
-		logger.WithMinLevel(slog.LevelInfo),
-		logger.WithHandler(otelslog.NewHandler("")),
-	))
-
-	mux := httpserver.NewServeMux()
-	mux.Use(
-		httpserver.MiddlewareLogging,
-		httpserver.MiddlewareRecover,
-		otelhttp.NewMiddleware(""),
-		httpserver.MiddlewareTelemetryTag,
-	)
-	mux.Get("/hello", handlerHello)
-
-	s := &http.Server{
-		Addr:              "0.0.0.0:8080",
-		Handler:           mux,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       30 * time.Second,
-	}
-	fmt.Print(s != nil)
-	// Output: true
-}
-
-func ExampleMiddlewareRecover() {
-	slog.SetDefault(logger.NewLogger(
-		logger.WithMinLevel(slog.LevelInfo),
-		logger.WithHandler(otelslog.NewHandler("")),
-	))
-
-	mux := httpserver.NewServeMux()
-	mux.Use(
-		httpserver.MiddlewareLogging,
-		httpserver.MiddlewareRecover,
-		otelhttp.NewMiddleware(""),
-		httpserver.MiddlewareTelemetryTag,
-	)
-	mux.Get("/hello", handlerHello)
-
-	s := &http.Server{
-		Addr:              "0.0.0.0:8080",
-		Handler:           mux,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       30 * time.Second,
-	}
-	fmt.Print(s != nil)
-	// Output: true
-}
-
-func ExampleMiddlewareTelemetryTag() {
-	slog.SetDefault(logger.NewLogger(
-		logger.WithMinLevel(slog.LevelInfo),
-		logger.WithHandler(otelslog.NewHandler("")),
-	))
-
-	mux := httpserver.NewServeMux()
-	mux.Use(
-		httpserver.MiddlewareLogging,
-		httpserver.MiddlewareRecover,
-		otelhttp.NewMiddleware(""),
-		httpserver.MiddlewareTelemetryTag,
-	)
-	mux.Get("/hello", handlerHello)
-
-	s := &http.Server{
-		Addr:              "0.0.0.0:8080",
-		Handler:           mux,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       30 * time.Second,
-	}
-	fmt.Print(s != nil)
-	// Output: true
 }

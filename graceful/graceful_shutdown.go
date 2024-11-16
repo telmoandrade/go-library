@@ -97,14 +97,14 @@ func (gs *gracefulShutdown) runServer(s GracefulServer) {
 			showdownCtx, cancelShowdownCtx = context.WithTimeout(showdownCtx, gs.timeout)
 		}
 		go func() {
-			s.Stop(showdownCtx)
-			cancelShowdownCtx()
+			<-showdownCtx.Done()
+			if errors.Is(showdownCtx.Err(), context.DeadlineExceeded) {
+				s.ForceStop()
+			}
 		}()
 
-		<-showdownCtx.Done()
-		if errors.Is(showdownCtx.Err(), context.DeadlineExceeded) {
-			s.ForceStop()
-		}
+		s.Stop(showdownCtx)
+		cancelShowdownCtx()
 	}()
 
 	go func() {

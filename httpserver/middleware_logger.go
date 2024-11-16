@@ -8,24 +8,33 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/telmoandrade/go-library/logger"
 )
 
-func realIP(r *http.Request) string {
+func realIPExtractHeader(r *http.Request) string {
 	ip := r.Header.Get("True-Client-IP")
-	if ip == "" {
-		ip = r.Header.Get("X-Real-IP")
+	if ip != "" {
+		return ip
 	}
-	if ip == "" {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			i := strings.Index(xff, ",")
-			if i == -1 {
-				i = len(xff)
-			}
-			ip = xff[:i]
+
+	ip = r.Header.Get("X-Real-IP")
+	if ip != "" {
+		return ip
+	}
+
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		i := strings.IndexByte(xff, ',')
+		if i == -1 {
+			i = len(xff)
 		}
+		ip = xff[:i]
 	}
+
+	return ip
+}
+
+func realIP(r *http.Request) string {
+	ip := realIPExtractHeader(r)
 
 	if ip != "" && net.ParseIP(ip) != nil {
 		return ip
@@ -73,7 +82,7 @@ func sinceRound(since time.Duration) time.Duration {
 // Example:
 //
 //	mux := httpserver.NewServeMux()
-//	mux.Use(httpserver.MiddlewareLogging)   // <--<< MiddlewareLogging should come before MiddlewareRecover
+//	mux.Use(httpserver.MiddlewareLogging)   // <--<< MiddlewareLogging must come before MiddlewareRecover
 //	mux.Use(httpserver.MiddlewareRecover)
 //	mux.Get("/", handler)
 func MiddlewareLogging(next http.Handler) http.Handler {
@@ -82,29 +91,20 @@ func MiddlewareLogging(next http.Handler) http.Handler {
 
 		ctx := r.Context()
 
-		u, err := uuid.Parse(r.Header.Get("X-Logger-ID"))
-		if err != nil {
-			u, _ = uuid.NewV7()
-		}
-		ctx = logger.WithContextLogID(ctx, u)
-		if u != uuid.Nil {
-			w.Header().Add("X-Logger-ID", u.String())
-		}
+		ctx, u := logger.LogId(ctx, r.Header.Get("X-Logger-ID"))
+		w.Header().Add("X-Logger-ID", u.String())
 
 		loggerLevel := r.Header.Get("X-Logger-Level")
-		if loggerLevel != "" {
-			ctx = logger.WithContextMinLevel(ctx, loggerLevel)
+		ctx, err := logger.MinLevel(ctx, loggerLevel)
+		if err == nil {
 			w.Header().Add("X-Logger-Level", loggerLevel)
 		}
 
 		wrw := &wrapResponseWriter{
 			ResponseWriter: w,
-			code:           http.StatusOK,
 		}
 
 		next.ServeHTTP(wrw, r.WithContext(ctx))
-
-		routePath := r.Pattern[strings.Index(r.Pattern, "/"):]
 
 		since := time.Since(start)
 		slogAny := []any{
@@ -113,7 +113,7 @@ func MiddlewareLogging(next http.Handler) http.Handler {
 			),
 			slog.Group("request",
 				slog.String("method", r.Method),
-				slog.String("route", routePath),
+				slog.String("pattern", r.Pattern),
 				slog.String("path", r.URL.Path),
 				slog.Int64("size", r.ContentLength),
 			),
@@ -130,11 +130,11 @@ func MiddlewareLogging(next http.Handler) http.Handler {
 			),
 		}
 
-		msg := fmt.Sprintf("HTTP Response %03d %dB %v %s %s", wrw.code, wrw.bytes, sinceRound(since), r.Method, routePath)
+		msg := fmt.Sprintf("HTTP Response %03d %dB %v %s %s", wrw.code, wrw.bytes, sinceRound(since), r.Method, r.URL.Path)
 
-		if wrw.code < 100 || wrw.code >= 500 {
+		if wrw.code < http.StatusContinue || wrw.code >= http.StatusInternalServerError {
 			slog.ErrorContext(ctx, msg, slogAny...)
-		} else if wrw.code < 200 || wrw.code >= 400 {
+		} else if wrw.code < http.StatusOK || wrw.code >= http.StatusBadRequest {
 			slog.WarnContext(ctx, msg, slogAny...)
 		} else {
 			slog.InfoContext(ctx, msg, slogAny...)

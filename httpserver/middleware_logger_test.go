@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func Test_realIP(t *testing.T) {
+func Test_realIPExtractHeader(t *testing.T) {
 	type args struct {
 		key   string
 		value string
@@ -53,30 +53,66 @@ func Test_realIP(t *testing.T) {
 		},
 		{
 			name: "no header",
-			want: "127.0.0.1",
+			want: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, _ := http.NewRequest("GET", "/", nil)
+			r, _ := http.NewRequest(http.MethodGet, "/", nil)
 			r.Header.Add(tt.args.key, tt.args.value)
-			r.RemoteAddr = "127.0.0.1:12345"
+
+			if got := realIPExtractHeader(r); got != tt.want {
+				t.Errorf("realIPExtractHeader() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_realIP(t *testing.T) {
+	type args struct {
+		key        string
+		value      string
+		remoteAddr string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "True-Client-IP",
+			args: args{
+				key:   "True-Client-IP",
+				value: "100.100.100.100",
+			},
+			want: "100.100.100.100",
+		},
+		{
+			name: "no header",
+			args: args{
+				remoteAddr: "127.0.0.1:12345",
+			},
+			want: "127.0.0.1",
+		},
+		{
+			name: "invalid remote addr",
+			args: args{
+				remoteAddr: "invalid",
+			},
+			want: "invalid",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, _ := http.NewRequest(http.MethodGet, "/", nil)
+			r.Header.Add(tt.args.key, tt.args.value)
+			r.RemoteAddr = tt.args.remoteAddr
 
 			if got := realIP(r); got != tt.want {
 				t.Errorf("realIP() = %v, want %v", got, tt.want)
 			}
 		})
 	}
-
-	t.Run("invalid remote addr", func(t *testing.T) {
-		r, _ := http.NewRequest("GET", "/", nil)
-		r.RemoteAddr = "invalid"
-
-		realIP(r)
-		if r.RemoteAddr != "invalid" {
-			t.Errorf("realIP() = %v, want %v", r.RemoteAddr, "invalid")
-		}
-	})
 }
 
 func Test_sinceRound(t *testing.T) {
@@ -119,41 +155,64 @@ func TestMiddlewareLogging(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 
+	type args struct {
+		headerKey   string
+		headerValue string
+		status      int
+	}
+	type want struct {
+		statusCode int
+	}
 	tests := []struct {
-		name   string
-		status int
-		want   int
+		name string
+		args args
+		want want
 	}{
 		{
-			name:   "InternalServerError",
-			status: http.StatusInternalServerError,
-			want:   http.StatusInternalServerError,
+			name: "InternalServerError",
+			args: args{
+				status: http.StatusInternalServerError,
+			},
+			want: want{statusCode: http.StatusInternalServerError},
 		},
 		{
-			name:   "NotFound",
-			status: http.StatusNotFound,
-			want:   http.StatusNotFound,
+			name: "NotFound",
+			args: args{
+				status: http.StatusNotFound,
+			},
+			want: want{statusCode: http.StatusNotFound},
 		},
 		{
-			name:   "Ok",
-			status: http.StatusOK,
-			want:   http.StatusOK,
+			name: "Ok",
+			args: args{
+				status: http.StatusOK,
+			},
+			want: want{statusCode: http.StatusOK},
+		},
+		{
+			name: "Ok with header",
+			args: args{
+				status:      http.StatusOK,
+				headerKey:   "X-Logger-Level",
+				headerValue: "info",
+			},
+			want: want{statusCode: http.StatusOK},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest("GET", "/", nil)
-			r.Header.Add("X-Logger-Level", "debug")
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			r.Pattern = "GET /"
+			r.Header.Add(tt.args.headerKey, tt.args.headerValue)
 			w := httptest.NewRecorder()
 
 			m := MiddlewareLogging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.status)
+				w.WriteHeader(tt.args.status)
 			}))
 			m.ServeHTTP(w, r)
 
-			if w.Code != tt.want {
-				t.Errorf("Code() = %v, want %v", w.Code, tt.want)
+			if w.Code != tt.want.statusCode {
+				t.Errorf("Code() = %v, want %v", w.Code, tt.want.statusCode)
 			}
 		})
 	}

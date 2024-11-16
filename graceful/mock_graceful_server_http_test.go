@@ -20,6 +20,7 @@ import (
 type MockhttpServer struct {
 	ctrl     *gomock.Controller
 	recorder *MockhttpServerMockRecorder
+	isgomock struct{}
 }
 
 // MockhttpServerMockRecorder is the mock recorder for MockhttpServer.
