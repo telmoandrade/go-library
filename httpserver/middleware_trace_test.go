@@ -1,16 +1,16 @@
-package httpserver_test
+package httpserver
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/telmoandrade/go-library/httpserver"
 	"github.com/telmoandrade/go-library/logger"
 )
 
-func TestMiddlewareTelemetryTag(t *testing.T) {
+func TestMiddlewareTrace(t *testing.T) {
 	tests := []struct {
 		name   string
 		status int
@@ -36,9 +36,9 @@ func TestMiddlewareTelemetryTag(t *testing.T) {
 			r.Pattern = "GET /"
 			w := httptest.NewRecorder()
 
-			ctx := logger.WithContextLogID(r.Context(), tt.args)
+			ctx := context.WithValue(r.Context(), logger.ContextLogID, tt.args)
 
-			m := httpserver.MiddlewareTelemetryTag(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			m := MiddlewareTrace(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.status)
 			}))
 

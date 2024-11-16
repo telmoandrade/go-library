@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"bytes"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -17,28 +18,28 @@ func Test_wrapResponseWriter_WriteHeader(t *testing.T) {
 		want int
 	}{
 		{
-			name: "code 200, 200",
+			name: "code http.StatusOK, http.StatusOK",
 			args: args{
-				code1: 200,
-				code2: 200,
+				code1: http.StatusOK,
+				code2: http.StatusOK,
 			},
-			want: 200,
+			want: http.StatusOK,
 		},
 		{
-			name: "code 200, 400",
+			name: "code http.StatusOK, http.StatusBadRequest",
 			args: args{
-				code1: 200,
-				code2: 400,
+				code1: http.StatusOK,
+				code2: http.StatusBadRequest,
 			},
-			want: 200,
+			want: http.StatusOK,
 		},
 		{
-			name: "code 400, 200",
+			name: "code http.StatusBadRequest, http.StatusOK",
 			args: args{
-				code1: 400,
-				code2: 200,
+				code1: http.StatusBadRequest,
+				code2: http.StatusOK,
 			},
-			want: 400,
+			want: http.StatusBadRequest,
 		},
 	}
 	for _, tt := range tests {

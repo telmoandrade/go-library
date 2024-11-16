@@ -41,7 +41,7 @@ type (
 //   - If the not defined [WithAllowedHeaders], any header is allowed.
 //   - If the defined [WithAllowOriginFunc], will have the responsibility to allow origin, ignoring the [WithAllowedOrigins].
 func WithCors(opts ...OptionCors) OptionServeMux {
-	return func(mux *ServeMux) {
+	return func(mux *serveMux) {
 		c := &cors{
 			maxAge:                 86400,
 			allowedOrigins:         []string{},
@@ -54,46 +54,11 @@ func WithCors(opts ...OptionCors) OptionServeMux {
 			opt(c)
 		}
 
-		if len(c.allowedOrigins) == 0 && c.allowOriginFunc == nil {
-			c.allowedOriginsAll = true
-		} else if c.allowOriginFunc != nil {
-			c.allowedOriginsAll = false
-			c.allowedOrigins = []string{}
-		} else {
-			allowedOrigins := []string{}
+		c.computeAllowedOrigins()
+		c.computeAllowedHeaders()
+		c.computeExposedHeaders()
 
-			for _, origin := range c.allowedOrigins {
-				if origin == "*" {
-					c.allowedOriginsAll = true
-					c.allowedOrigins = []string{}
-					break
-				} else if i := strings.IndexByte(origin, '*'); i >= 0 {
-					w := wildcard{
-						prefix: origin[0:i],
-						suffix: origin[i+1:],
-						len:    len(origin) - 1,
-					}
-					c.allowedWildcardOrigins = append(c.allowedWildcardOrigins, w)
-				} else {
-					allowedOrigins = append(allowedOrigins, origin)
-				}
-			}
-			c.allowedOrigins = allowedOrigins
-		}
-
-		if len(c.allowedHeaders) == 0 {
-			c.allowedHeadersAll = true
-		} else {
-			for _, h := range c.allowedHeaders {
-				if h == "*" {
-					c.allowedHeadersAll = true
-					c.allowedHeaders = []string{}
-					break
-				}
-			}
-		}
-
-		mux.options.cors = c
+		mux.config.cors = c
 	}
 }
 
@@ -101,8 +66,8 @@ func WithCors(opts ...OptionCors) OptionServeMux {
 func WithAllowedOrigins(allowedOrigins ...string) OptionCors {
 	return func(c *cors) {
 		for _, origin := range allowedOrigins {
-			origin = strings.ToLower(origin)
-			if !slices.Contains(c.allowedOrigins, origin) {
+			origin = strings.TrimSpace(strings.ToLower(origin))
+			if origin != "" && !slices.Contains(c.allowedOrigins, origin) {
 				c.allowedOrigins = append(c.allowedOrigins, origin)
 			}
 		}
@@ -122,8 +87,8 @@ func WithAllowOriginFunc(fn func(r *http.Request, origin string) bool) OptionCor
 func WithAllowedHeaders(allowedHeaders ...string) OptionCors {
 	return func(c *cors) {
 		for _, header := range allowedHeaders {
-			header = http.CanonicalHeaderKey(header)
-			if !slices.Contains(c.allowedHeaders, header) {
+			header = http.CanonicalHeaderKey(strings.TrimSpace(header))
+			if header != "" && !slices.Contains(c.allowedHeaders, header) {
 				c.allowedHeaders = append(c.allowedHeaders, header)
 			}
 		}
@@ -134,8 +99,8 @@ func WithAllowedHeaders(allowedHeaders ...string) OptionCors {
 func WithExposedHeaders(exposedHeaders ...string) OptionCors {
 	return func(c *cors) {
 		for _, header := range exposedHeaders {
-			header = http.CanonicalHeaderKey(header)
-			if !slices.Contains(c.exposedHeaders, header) {
+			header = http.CanonicalHeaderKey(strings.TrimSpace(header))
+			if header != "" && !slices.Contains(c.exposedHeaders, header) {
 				c.exposedHeaders = append(c.exposedHeaders, header)
 			}
 		}
@@ -154,6 +119,51 @@ func WithCorsMaxAge(seconds int) OptionCors {
 	return func(c *cors) {
 		c.maxAge = seconds
 	}
+}
+
+func (c *cors) computeAllowedOrigins() {
+	if c.allowOriginFunc != nil {
+		return
+	}
+
+	if len(c.allowedOrigins) == 0 || slices.Contains(c.allowedOrigins, "*") {
+		c.allowedOriginsAll = true
+	} else {
+		allowedOrigins := []string{}
+		for _, origin := range c.allowedOrigins {
+			if i := strings.IndexByte(origin, '*'); i >= 0 {
+				w := wildcard{
+					prefix: origin[0:i],
+					suffix: origin[i+1:],
+					len:    len(origin) - 1,
+				}
+				c.allowedWildcardOrigins = append(c.allowedWildcardOrigins, w)
+			} else {
+				allowedOrigins = append(allowedOrigins, origin)
+			}
+		}
+		c.allowedOrigins = allowedOrigins
+	}
+}
+
+func (c *cors) computeAllowedHeaders() {
+	if len(c.allowedHeaders) == 0 {
+		c.allowedHeadersAll = true
+	} else {
+		for _, h := range c.allowedHeaders {
+			if h == "*" {
+				c.allowedHeadersAll = true
+				c.allowedHeaders = []string{}
+				break
+			}
+		}
+	}
+}
+
+func (c *cors) computeExposedHeaders() {
+	c.exposedHeaders = slices.DeleteFunc(c.exposedHeaders, func(exposedHeader string) bool {
+		return exposedHeader == "*" && c.allowCredentials
+	})
 }
 
 func (c *cors) isOriginAllowed(r *http.Request, origin string) bool {
@@ -177,6 +187,6 @@ func (c *cors) isOriginAllowed(r *http.Request, origin string) bool {
 	return false
 }
 
-func (w wildcard) match(s string) bool {
-	return len(s) > w.len && strings.HasPrefix(s, w.prefix) && strings.HasSuffix(s, w.suffix)
+func (w wildcard) match(origin string) bool {
+	return len(origin) > w.len && strings.HasPrefix(origin, w.prefix) && strings.HasSuffix(origin, w.suffix)
 }
